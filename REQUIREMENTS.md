@@ -1,93 +1,115 @@
-# **Specifica dei Requisiti: Agente BDI per Deliveroo.js (Fase 1\)**
+# Specifica dei Requisiti: Agente BDI per Deliveroo.js (Fase 1)
 
-## **1\. Architettura di Sistema e API**
+## 1. Architettura di Sistema e API
 
-* **Ambiente:** Node.js.  
-* **Libreria SDK:** @unitn-asa/deliveroo-js-sdk.  
-* **Connessione:** WebSocket tramite DjsConnect e DjsClientSocket.  
-* **Gestione Eventi (Input):**  
-  * map: Ricezione topologia iniziale (width, height, tiles).  
-  * you: Dati dell'agente corrente (id, name, x, y, score, penalty).  
-  * parcelsSensing: Array dei pacchi nel raggio visivo.  
-  * agentsSensing: Array degli agenti nel raggio visivo.  
-* **Azioni (Output \- Asincrone):**  
-  * await socket.emitMove(direction): Ritorna {x,y} in caso di successo o false in caso di fallimento. Direzioni valide: up, down, left, right.  
-  * await socket.emitPickup(): Ritorna array di pacchi raccolti.  
-  * await socket.emitPutdown(selected\_ids): Ritorna array dei pacchi depositati. Se nessun ID viene specificato, rilascia tutti i pacchi trasportati.
+- **Ambiente:** Node.js.
+- **Libreria SDK:** `@unitn-asa/deliveroo-js-sdk`.
+- **Connessione:** WebSocket tramite `DjsConnect` e `DjsClientSocket`.
 
-## **2\. Gestione Beliefs (Sensing e Memoria)**
+**Gestione Eventi (Input):**
+- `map`: Ricezione topologia iniziale (`width`, `height`, `tiles`).
+- `you`: Dati dell'agente corrente (`id`, `name`, `x`, `y`, `score`, `penalty`).
+- `parcelsSensing`: Array dei pacchi nel raggio visivo.
+- `agentsSensing`: Array degli agenti nel raggio visivo.
 
-* **Struttura della Mappa Statica (IOTileType):**  
-  * 0: Muro / Non calpestabile (wall).  
-  * 1: Generatore pacchi (parcel spawner).  
-  * 2: Zona di consegna (delivery).  
-  * 3: Area calpestabile standard (walkable).  
-  * 4: Base (base).  
-  * 5: Piastrella di scorrimento cassa (crate sliding tile). Nota: da chiarire.  
-  * 5\!: Generatore casse (crate spawner). Nota: da chiarire.  
-  * ↑, →, ↓, ←: Frecce direzionali. Obbligano a muoversi secondo la direzione indicata.  
-* **Osservabilità Parziale:** Acquisizione dati limitata a un'area definita dall'equazione ![][image1].  
-* **Belief Revision e Persistenza:**  
-  * Registrazione in una struttura dati locale dei pacchi acquisiti tramite parcelsSensing.  
-  * Simulazione locale del decadimento temporale del reward. Il punteggio deve essere aggiornato deduttivamente sottraendo il tempo di sistema trascorso dall'ultima osservazione.  
-  * Eliminazione logica (forgetting) dei pacchi quando il reward calcolato scende a ![][image2] o quando un'osservazione diretta della cella non rileva la presenza del pacco atteso (prelevato da altri agenti).
+**Azioni (Output — Asincrone):**
+- `await socket.emitMove(direction)`: Ritorna `{x, y}` in caso di successo o `false` in caso di fallimento. Direzioni valide: `up`, `down`, `left`, `right`.
+- `await socket.emitPickup()`: Ritorna array di pacchi raccolti.
+- `await socket.emitPutdown(selected_ids)`: Ritorna array dei pacchi depositati. Se nessun ID viene specificato, rilascia tutti i pacchi trasportati.
 
-## **3\. Deliberazione e Funzione di Utilità (Desire \-\> Intention)**
+---
 
-* **Obiettivo:** Ottimizzazione del rateo di acquisizione punti rispetto al tempo impiegato.  
-* **Equazione dell'Utilità Target (![][image3]):![][image4]**  
-  * **![][image5]**: Valore corrente stimato del pacco target.  
-  * ![][image6]: Stima del tempo/tick necessari per posizionarsi sulle coordinate del pacco. Si calcola moltiplicando la lunghezza del percorso generato dal Planner per il costo unitario del movimento.  
-  * ![][image7]: Stima del tempo/tick necessari per trasportare il pacco dalle sue coordinate di origine alla zona di tipo 2 più accessibile.  
-* **Vincoli Matematici:** La generazione dell'Intention per uno specifico pacco è condizionata a ![][image8]. Pacchi con ![][image9] vengono scartati dalla matrice decisionale.  
-* **Logica Multi-Pickup:** Integrazione di routine per valutare il prelievo di pacchi secondari lungo il vettore di trasporto primario, a condizione che l'aumento marginale del ![][image7] non riduca a ![][image2] il reward totale atteso.
+## 2. Gestione Beliefs (Sensing e Memoria)
 
-## **4\. Implementazione del Planner Esterno**
+**Struttura della Mappa Statica (`IOTileType`):**
 
-* **Algoritmo Richiesto:** A\* (A-Star) Pathfinding.  
-* **Mappatura del Grafo:**  
-  * Nodi navigabili: Celle di tipo 1, 2, 3, 4, 5, ↑, →, ↓, ←. (Nota: Il modello di costo dell'algoritmo dovrà eventualmente pesare in modo diverso le celle 5 e le frecce se queste impongono movimenti forzati o alterano i tempi di percorrenza).  
-  * Nodi non navigabili (ostacoli statici): Celle di tipo 0 e 5\!.  
-  * Ostacoli dinamici: Posizioni attuali di altri agenti dedotte da agentsSensing.  
-* **Funzione Euristica:** Distanza di Manhattan (![][image10]).  
-* **Struttura Output:** Array sequenziale standardizzato contenente i vettori di movimento (es. \['up', 'up', 'right', 'down'\]).
+| Tipo | Descrizione |
+|------|-------------|
+| `0`  | Muro / Non calpestabile (wall) |
+| `1`  | Generatore pacchi (parcel spawner) |
+| `2`  | Zona di consegna (delivery) |
+| `3`  | Area calpestabile standard (walkable) |
+| `4`  | Base |
+| `5`  | Piastrella di scorrimento cassa (crate sliding tile) — *da chiarire* |
+| `5!` | Generatore casse (crate spawner) — *da chiarire* |
+| `↑ → ↓ ←` | Frecce direzionali: obbligano a muoversi nella direzione indicata |
 
-## **5\. Esecuzione del Piano e Trigger di Replanning**
+**Osservabilità Parziale:** acquisizione dati limitata all'area definita da:
 
-* **Motore di Esecuzione:** Loop asincrono che processa in serie gli indici dell'array fornito dal Planner.  
-* **Gestione Collisioni e Lock:** Le azioni di movimento occupano la cella di destinazione bloccandola. Se emitMove restituisce false, viene applicata una penalità logica.  
-* **Trigger per l'innesco del Replanning:**  
-  1. **Impedimento fisico:** Fallimento dell'istruzione emitMove dovuto a occupazione dinamica della tile. (Implementare delay di retry prima della ripianificazione totale).  
-  2. **Sottrazione dell'obiettivo:** Rilevazione dell'assenza del pacco target.  
-  3. **Decadimento dell'utilità:** Il ricalcolo periodico del target rileva ![][image9].  
-  4. **Opportunità superiore:** Identificazione sensoriale di un nuovo pacco con un valore ![][image11] (per evitare oscillazioni decisionali costanti).
+```
+x_offset + y_offset < 5
+```
 
-## **6\. Piano Strutturale di Sviluppo**
+**Belief Revision e Persistenza:**
+- Registrazione in una struttura dati locale dei pacchi acquisiti tramite `parcelsSensing`.
+- Simulazione locale del decadimento temporale del reward: il punteggio viene aggiornato deduttivamente sottraendo il tempo di sistema trascorso dall'ultima osservazione.
+- Eliminazione logica (*forgetting*) dei pacchi quando il reward calcolato scende a `<= 0`, oppure quando un'osservazione diretta della cella non rileva la presenza del pacco atteso (prelevato da altri agenti).
 
-1. **Inizializzazione (Bootstrap):** Configurazione ambiente, connessione WebSocket, listener su map e inizializzazione mapping delle tile navigabili e non navigabili.  
-2. **Modulo di Memoria (Beliefs):** Creazione delle classi di gestione dello stato per calcolare asincronamente i tick del mondo non osservato.  
-3. **Algoritmo di Navigazione (Planner):** Implementazione di A\* e calcolatori di costo distanza (Manhattan), adattato per gestire i nuovi tipi di tile (es. frecce direzionali).  
-4. **Motore di Deliberazione:** Scrittura dell'algoritmo di scoring per l'applicazione della Funzione di Utilità sull'array globale dei Beliefs.  
-5. **Loop Operativo:** Integrazione di Esecuzione asincrona, controllo fallimenti e innesco eventi di Replanning.
+---
 
-[image1]: <data:image/png;base64,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>
+## 3. Deliberazione e Funzione di Utilità (Desire → Intention)
 
-[image2]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAB4AAAAXCAYAAAAcP/9qAAABO0lEQVR4Xu2UsUrDUBSG61jUDpUYJCFJSSCPIK4FZ0c7u7hUfAFfo0tBfIM8g5uDc0Y3dyc76FD/U07w9ufe9jaIXfLBofQ//8l/em9Jr9fRQZRlecyaizRNK9RS65H7XmBwLA9IkuSOezbg/UDNje9z0UzPRmC+kcAsy6645wLLXcoMyQf6yy9IXweGBw085942MFdbgkWX4GfWV2DbJzWMuOeLzruCF6Ymx/CC+oqi6MRstEEDPh3670Kp3iNqbPha4x3cgPucSEM+ubcLOwc3yB9KDLjve+75oAHfDt0d3ADTSM0z7m0C/ndbgD7rjXUnRVEMMLBAVdyzAd/UFYzTvGV9K3Ec9zFcs25h9bKQF0kjIPDatsyfgyWHerSvWsswDA/Ztx+CIDjCRmc+lef5Kc+3Zm/BHf/BDzaBaVTZlgfHAAAAAElFTkSuQmCC>
+**Obiettivo:** ottimizzazione del rateo di acquisizione punti rispetto al tempo impiegato.
 
-[image3]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAA8AAAAZCAYAAADuWXTMAAAA60lEQVR4Xu2RMQrCQBBFV7SwsA0WuyQbL2DnCTyEhafQwhNY2XgOOwt7wXMIYiNYa2Oh/om7y/pJTC36YCD5f2aYmVXqR8my7Iq4pGl6lMD3DfHwvrV2JP+xn+d5PzRIkqQjCYhzEN9pugZjNhTEoTNn7Hng31krgLGRYmOMZk9A057ksF4gXeM9GXhzmY51OUjb7btnzwPvJHmsh30RE/Y8tfvi/F32hLp9D27fFnuCTFb5Cm7k8rHUa7KqV/DFO9Y9nxr74i3rAi68wi0GrAewz9Lt3Ih1FK6hT2OtFCQt3AQhtNaG8/58JU/sxEh36LquLQAAAABJRU5ErkJggg==>
+**Equazione dell'Utilità Target:**
 
-[image4]: <data:image/png;base64,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>
+```
+U = R_current - (Cost_travel + Cost_delivery)
+```
 
-[image5]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAD0AAAAYCAYAAABJA/VsAAACvUlEQVR4Xu2WT6jMURTHZ+opQhYak2bm/eZPmV4pi7GypryUxdspZMfCiiJlISUJm9cr9RLJwsaOUGYxsVSkKMVLT48FIXpeeTWez9fv3Hl37m8KbzUz/b51uvd8z7n3d8+959z7y2RSpEgxtIii6Ozo6Og72iWTD6bPOa5cLu8Lxw0FXIAhzwbsF682tA00crncOgu6Fdrgxsw2G9oGGgQ0boGN97AdtZN+ENoGGgTVVGD5fH5tD1tbtkajsSq0DTTslLvquVKp5OEWkW+oWd828NDpWtCLurXt5p4XV61Wt4T+Q4FSqbTXgu6qZ/Qp8cVicY3P9ztqtdqmkEuAwFoKLqxn3ubDthk7fL6fQZZWWe/nkE/AAku8z3BPxFPb20Jbv4L1nkMmQ74L9Xp9vQXdCm1uM3Sh9bAdR56RDTfULxQKRdq7yFfP55Pef+v/2UDkEmMu0N5RGtJeRZ4irzmlK8gu+auk4ObRT0TxyWXp76R/DbnMHI9opzWnbHx/o83vZMatIwEGHzKnidDmJtDGmL5g7TTjTlm/pfdbi7CFuozJur7uDJoR6fiVaZsaQ3vPbbrzx7xbT6PjNF5r5ELdAPdQWUf7y76h788imz09kbEdYLwph1AwjXg+e4x/gXxExrzAEk8YizuDbUp9gmrQf+ls7oVY9o4RxT9FrYC7jbTtFWmzads92yT8SU/vrPmf6/l/YSn2PeQF8Upz9fG7jn7MsyWCM75pmeBzOr1E5gkKio0vqM+4rehznu3v9bwS6IP+hwT0+9Z2dp3+T/N9bHoiOOOXXN173C0/aJ009V8yWydb3Jxk2JFMXB7aLJeNPTdtxeAUzzPpqyhO+dMefxD9CzITxRfdW2owko3+Dxa3enmWGPDtkBPg31vdL0RWs2qR557PBPImsv8L/A9E8YV50fmkSJFiePEbi/3t7X9d3ukAAAAASUVORK5CYII=>
+- `R_current`: valore corrente stimato del pacco target.
+- `Cost_travel`: stima del tempo/tick necessari per raggiungere le coordinate del pacco. Si calcola moltiplicando la lunghezza del percorso generato dal Planner per il costo unitario del movimento.
+- `Cost_delivery`: stima del tempo/tick necessari per trasportare il pacco dalla sua posizione alla zona di tipo `2` più accessibile.
 
-[image6]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAE4AAAAYCAYAAABUfcv3AAADk0lEQVR4Xu1XPWhUQRBOQCGiCP7EI/e3F3NNRBA5FQKW/hAiKpIijRaCCLaigthJClEC2thY2IkhwUICQg48sfAngiCKIFpEAlYmREhhQhK/797MMZm7GJFTL/g+WHbnm9l5++bNzu5raooRI8ZqRzabPRBCKKL/jNarPLiuRCKx3trGAHK53EsEZxFtNJVKbRHuMOT59vb2fdT5Of81mEUSsBmIzV6PrCuI/p3X1QvwvYCPdN/zDYtCobBWgjLldRa0wYud9Xw90NraukHW0O11DQtmGRedTqfXeZ0FbZLJ5FbP1wOZTOYo/a+a+okM6pNMGvQ6D9p5TtAMXT8PEvi56ZUC2gzQBv15JTHu4eGD/i39cwwfx+3EhgQWOyfZlvK6XwHmXuH8fD6/kTIOkEOUuf3VRkuB2iA4ByE/kHGvBG4RbUzGPTq3IWEOhOUy6afAS170QSLE5y0jj6CVnH5EZa1vvAIp19DAdSMtL/HV61YC66EPgEL4yumL8bhww6hlSWtLaH3DFm3xOqKjo2Ob5/40sJ5utAW0Tq+jsk1eaNzrPEJ0TbFyv8xd4hhZs0n4SkD1/mfavJ0DuYS2YDkF/G0Pv/Fh6wGu1XMKFmy+yBevsEB25WFz1XLyslWOeV0hjyzaWUPXYi7YbcqLXJW5RIg+UGXb/y3Ibvzm+QqCnGa+ThkwuHOeBDdUK3DgviNLPnDMQElQbEaXP5ZuS39/E/ke/1qE1/aJevRjIt+Aj2voH6pjPPcI5Mdor9CK+ueD8XPhd4u85DCE/Axz79IGuyMIdxntjtpUwVx+Z5vcHwOcbw5R0Kr+JFh3OM/WH8jD4qcM3bb8esZmAK1oZC0X5QxEP9lknkedjlkL0a0hh6Dl6AfPeEQdT2pms5/HzEcwEpBLMp8fdFDXBH6GO4pjBhq6PuEnMG+X+lsOzIKP8gK2XfCGFljsDmd/uobNmZV8giuKbtZmfq36pjcByxEyv1xvmU3BbTOZU/4gLCfs4X8/+Wx0t5y3a6v1jFWDUKO+hei0K1nOBxOBuBTMNstG/9kTRn5i7J4qr5D69k8OpLogRNeYTrn6nBCuqFvO2VYCh/EUbPaiHxWZwR7iGKUlo1sTXJcNHLOdwdTAS2ZWlamGB17gZIgOg+vKYTyjB4sFbE9B9xq6Nwwy2nsEb4/qIU+H6CZwzs5jgDD3BfpJzD0mHOvuNPjb1jZGjBgx/gf8AHnpN023dcvvAAAAAElFTkSuQmCC>
+**Vincoli:**
+- La generazione dell'Intention per un pacco è condizionata a `U > 0`.
+- Pacchi con `U <= 0` vengono scartati dalla matrice decisionale.
 
-[image7]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFsAAAAYCAYAAACV+oFbAAAEK0lEQVR4Xu1YS0iVQRT+JQOjFz3sovfq+LggVhAhBUKL6B1ChLgIghaBtZE2YYtoFy6CEAoiCKFdoSQuQogSchWSgRtDCEUMKVpkILlIUfu+/565Ho83tbhiXv4PDjPnMeefOTNzZuYPgggRIkRYO5SWlp5yzvWg/Axq8HLIamOx2FZtG+EfUVZW9h4BnQe9icfje0R2FvxseXn5Uepsmwh/Ca5WCfIU2Dyrx+quEf1Hq8sW4HsOE9tu5TmFmpqazRLIH1anQRsE47qVZwOFhYXbpA/nrS6nwNXMgSYSiS1Wp0Gb4uLivVaeDZSUlFyg/5w+D7BSL8mK7bA6C9pZmSAPuhYepvDzwCoFtGmlDcqbXoh6HQ9glIP0zzp8XNQNcwYY4Iys6rjVrQZoe4ftk8nkDvI4RM+QZ2ryNj5NeRsE9DT4Lqk3SLDnQf1Sr/NtcwbqUPzTil0WCMwtG1hCfD5UfDeo1+i7Pe/zNa+bXpZzwNUuIQP/bnUrgfndBs1D5OlbC+pjIutEbi7WtoTP10gfBVanAZvLK9lBX81vOzXZQSqFLdtuzYEOFEkQxqzOwqWuhJpvkbbVWo7VuUvk6Unw93NFs7oN+F7QnJZlgt8BVm4Bm6/45iEtQ7+uaX49EM44O2cVGljFSdjc1TIJ0JKB82pIOVbrwQy6grKFR1ORlwu/ZIdYwKYe1GPlFpn69V/AyS3A5l0FTsiMFUL2ItOgIPuFVfSJdQZXAql3zqItbe/Xwj/3xpi0I+wj7F+zZMrxOvDNoAHo7jm54UhqnFQ290FdXi+H9Qcnuwttj/P73p6HOPhpjOGGk/SKeiPs2sE3cWxszzQqZ1bat4w3/e0lUA+a6cC8HOFwt0sFesmLsrKych/bsfQy8J3iJ4RPKQyAsml1anW6hVQWrnSUE4F8D/XDoC/Kdp6TwTp8P3Vqt6HeJ+VtUBvrDAgCcA58k5MJRPnS+woWvhMGu6KiYqevE5xEFPkoO1xqV434SwVjY33L2bPizuNqG6YTQ83WUAMD3m/sr2awaVzJJ2Q9opvWO8yldkl4QzH5Ol/sx0ETTqUgkS06R+gHOTym+FrQkOLfStnPPpSm3gLTCF6lsunRu0rJ075dKrVuzBcwOp5+Ucqq6RV5uBsWGQusnIFgQLRMglIvbL4PImRTTFvKNA369bvKw6/y5Ww2DPRAmCsZFG7pQFa2MqXtO5mESf5S8Ac0+DZQE7e8/x0BfgT+KqT+RPno08HmhFRVVW23QVV6fi+8XPAPaSabDQN0/gRomNtaDkre18MVKbpvoFHQI9WGL+JRz6PtMfBDKK94mRyis7RjnvbyIJVOf8L2FcpJ9eLlH8/wxWsB+aCknQG3inwd4R+B4D5zCwf7OIJ+wNpEyBK4O3ig8woIemz1EbKLTQjyySDD1TjCOuI3Y3BukQhesioAAAAASUVORK5CYII=>
+**Logica Multi-Pickup:** valutare il prelievo di pacchi secondari lungo il percorso di trasporto primario, a condizione che l'aumento marginale di `Cost_delivery` non riduca a `<= 0` il reward totale atteso.
 
-[image8]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADMAAAAYCAYAAABXysXfAAAB8ElEQVR4Xu2Vv0vDUBDHU1AoOOgWpEnTpoObS8BJHcRFBEdxcfEP0MFBcHfq4uLm4ioiOHRxKjgITg46FjqIjiKIg+KP75VLcjmbNq8tnfKBo+T7vb53997Li2Xl5OQY43leC/GO+OV4RtyHfrlc3sbzt/QrlcqMHGMc2LY9hbk/wjqq1eqyzumAgn1OamgvhHytjQvf96e5AS/UeIH3ZV5oHFIymlrVHsGr8qL1FCZqtZqrxWHA3A+IR6m5rrvRdYEhPrExoT2CmqSGtZ4GjuEW7/S69gaBxsKYZ1IrlUoOb0Ag9U4y4ishCuA1HMcpab0f+N8KT7invazgaNlc36nU8TzLerzIVCSLFyI3AbwfrZmAguZ4jhPt9YNWnhfkQOqimbhuSuLkRZEbge0twm9rfRC4AHpxL7WXRoZmmlJsk2j1eF/0QMPCF8ob4haPBe1LTJshIfUYeQO+L70waUYUfdRNT1wMnHgj8hL0atQULsDomIHCv6Kt+DZDrEUiC804LQYDnOPlXdC6KeICqGsvC/jfq6e+M9QEN1mMRJzFYxIttd1IuvK6fWEN8PhqRuxozwR8IJd0jXhuocZrkRYZdZ40CtpGnZcVLNAmjzOSjyaBMXdpTDpu+P3E753OGTlBEEziWM1rPScnJycnC3/pOaKAZbL1+gAAAABJRU5ErkJggg==>
+---
 
-[image9]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADMAAAAYCAYAAABXysXfAAACGUlEQVR4Xu2VPUsDQRCGN6gQENQuSD42uQRLm4CVWtnY6C/wL2hhIYitVRobO5u0IoKFCFaChWCjhWIlRBAFGxuxiPjxTjJ3NxmTy51GFLkHhuPeGeZmZm93jYmJiYmMtfYa9gR7Z7uDnbv+XC63gPdX6c/n8yMyxzdIsHUllUoN4tvPbh2FQmFaxzRAwQ4H7WufC/m19lXK5fIA8t2Q4bVP+zWO4wxzA9bVbHPAyzLOdaxSMJqa0T6Cp3Kv9aiUSqUhnu6JCbkiBOIvYJdSy2azc20HDPGWHf3aR1CT1LDWw1IsFrM8yV3tCwPVhl+7KrV0Op3hBShLvREMe2kRBfDtZzKZtNa7gd9inHNXtC8syJHiHFtSx/so6/6QqUgWd0RsC/C9aS0ITHGecmJqS9oXFZo851qRumjGr5uCOHhSxHqgsCT8Na13gjd3HXZgIuyLToRo5kiKNRJNwH7RicLAh8YD7MyEOLE6EbUZEjr+RvaL+0XQhxxXsBtaNe3shih6vZ3ecjBw4LGIayGo0Ygk8OFD5HumI1o7A0h8Ktr4pxls1hNZOPLDfJBgG6fJhNa/C763aZtH9aj2tQNxj1bdM9QEN5n0RPyLGyQatVkRtGfb3bA9BPnXcLuPaV2DC3JK14j3a1ppEeY5KrxCntEy6rjfBENf5JWo4lnH81THxHTDNk+aUGZ6cBf9KLrgIDN/vZmYmH/KB7K5rbQfVsBaAAAAAElFTkSuQmCC>
+## 4. Implementazione del Planner Esterno
 
-[image10]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAKUAAAAYCAYAAACbfz1xAAAEY0lEQVR4Xu1Zv2sUQRjdwwiKovgjhPy47CWmSaVwKAQURAUV1EZBwT9AEAsrBbFQxMZCNGCjhbESRQsL+6BN0CaNWGihIgiCiEUsFI3vXb5JPr/byc3lLreruw8+dr4fk30783Zm9hJFBQoUKFAgEJVK5YCN5RHlcnkLLiUbX2aU5L65hFd7cRy/t7E8AgN0r7u7e62NLycw9r2Dg4PnbTwv8GrPm8gZClF2Hl7teRM5Q4uiXGEDIShE6dGeN5EzLFWUrQirlb7/A7za8yZyhkKUnYdXe74EJukmctMjIyPrxL9Mf2BgYLWtTRPkB15TmNwJCa2gD7ul6xohQ6Ik/2mOt4mT434bSwlt4ejTXl2iWq2uRGwGzZK0Z2FfIMaNIsyfuj5NgMtR2HW2we042r9gX+GW+Fywq6aLFxkRZZfwZ47jftIlyuXyEcaizv9sZdE2jpwjG6vBJuC/waVL+bzxI9WuEcoAODjkWgMmt0p+uA7DDgvXM7rDYsiCKOHfHx4eXk8e5M9JVrmXcQYWhHZyjJsQ5UHX7uvr2yw33q5rNPr7+zeh5puNJ0FW3t5Qs/01uHLD+p2P+nFy1TUKXDk/Mw/7kXQECRGl5UcbGhraiusVG6fxee3f0GCNFmVFfkzG9RK5RmrFEe5Pnd/T07MG/g/nNwC32zp+PrOdNUI5UjPi0+64Go04VJQauPEpe2MN5K5hUPfGc9t9Q7RTlBao/wL7aOME4u8i+dmmMrfN14k3C6JU8d+wV85HzQZyxnWf5MfBdxtjC70WRdtE6bAYR66kaF9UtTOI33C+iidrz5uIarlXsO82riHbZpAolxMcENgFGyeYwyQ+YBvXVVL71+CHiDIJ/DtJwgpBUl/PtnhSnmGVilFAoaJsKxpxlBd1luKUHHexOo3EPu2ZBLe52ViWYGnXzpPij+GmJxbK0xMl30jhNyocaudJl4c/FamzsQO3fNbaXFZE6Z6FOVXHs9pvXce8PEfHEcrRAfHJeG4+bLyxKN3NMEFn8Rbskhu7L1gKtu4Qm5Yo5UFnKSTwfcE2txDm8KbugH/b9iEQf426czaeFVHK1sdxH6WPZ4nFnz9PEuzLuI51CqEcCbeqJh1l4hBRiv+NfwST9JAfBHIz2tso4WyZlijxgTXguPFQDR6HnJ8kOoLx2PNFnhVRSvy0GvfH8ky186SqSU2URAhHqfuZJEgiDhVls0hLlM0CHI+6QUN7FG93j85nRZT8NSNS/0uvJHzlEuwr8Y6jCY6fXAzt5zonsWTteROB+BdESRHCroLrMRoG8YmtWaooBXU7SAisKNHeycklFwnVzvhJK39aogzliPwzN9401EzqPOHVnjcRAJLRZt/6rMDypNmaFkW5JMRGlPDHYJ+jOZHzZ5xfyN9d6DFfN6OfRQlk2RHCURaqeX60JG3EPu15EzlDFkQpsT2IfYBN+M5iaaNdHL3aw2TstrE8gl+Q0RK34RZQkvvmEoX2ChQoUKBZ/AFaRdRPGUTvnQAAAABJRU5ErkJggg==>
+- **Algoritmo richiesto:** A* (A-Star) Pathfinding.
 
-[image11]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAATMAAAAYCAYAAACWRBofAAALlElEQVR4Xu1cbaicxRXeEAst/bIf6W3z8Z7dm9igFmxJW0hpqZRamx9tqZZGKi2BIvGHtJBQg9IfLSKltJYQBEuIjRH6YRSlaGoo+bHoD+0HmkrEIIbmSqKQYMVghCTcpM8zc86755199+7evXvjvZt5YNiZc858z5z3zJm5t9HIyMjIyMjIyMjIyMjIyMjIWNhYvXr1KhF5FuFAURTrSFu1atXnV6xY8bFUdhRguStXrrwC4X0pbz7RarUmEL6Y0i8WMM6fwLh+BtHLjLZs2bIPYDwwFCtXONFLA1hwRxDeRrig4TWEg8bHYvwh0tOe32w2L/dlLGZgMXwFfXzV9e+Cpq80GcSPeT7CE76MjA4wNk9y/BBdqukfI5zWcftUIj5noMyn3byU5SO+lTS05eteflTwayah36f0cv3MB7AHX7D6qcBIQ/x3RkM7vpXmuSSAjk/qIOxLeYZ00sYN6N/r7CMWyXtTHgHeDQh3p/QxxpKU0A8Yn/V164TWi66vkSszgtZfWj7iB5Q2b3NGhZH2V6JxwHpv9vQ6ML9ZrsPA6jdlRjBO2iWrzND5O3UAar9iExMT7wf/9ZT+bgDK5pspbRTQBXg+pRskHpkmU/o4ghtsmM3AMUI4ndIJ0mWelBnL1fmrlI+j1kd9etSoU2bEoCcX5N0xR2UWlLhXZgRpw8zfWED0GNVwZ28PKjnw70zp7wboH0FbziI8mPKGBX0MuhkeSXkGmUHRjRvmoMzauo66rDrQ/ygXWZnNN3ops0HBNZWV2YihC+FcSjeAt2+hORTVWnwLX8F/NtQ/Myww8dt0AXw55RE8eoJ/NKWPK4ZVZhinm3QtMfT1GdFhj3r+ofKHOKepDAHe3UX0UW1Fcgl+TzAPP0LKrygzrlXI3470/WjTrb4sVUD8GNKl8EKvOuvgLjYOopyrUmWG+JUo85cIe4oepxxi3bp179H+cM1tQ/geQyoH/g9E/dUoc1PK5zyRN6AyWwLaX3ScjopT/Kwb6Z0Ih5FcivR+hN+7vCzzHs3Lsnc3kg+Wzj3LeI5pHZsj+H0glbX+pqHVaomTuQr5/6d1HufY+zJqwYnXDIvVKlmK9r2EcGLY2yyJkzujZYqwLaWPK4ohlRmBcXxT11MZUNb2GrkbEaYbnQ8R55HyN5oM55M0LPJvMI0Ns5FpKgPmbarLQWqUGeI7tO5y3iC/mTT8Xqtya7T8vjeSEo/Q07bGdLOxzooyQ3hQ6+05fuBvAP8Wa59t5kRmGrSfWrqIypnjVYLzxDL6KbPJyckPKy0oWPT/k77frFs6lzRvgX6NxndpeS8y3VR/Mn7vYJrzYHWoMmMelnPSxgnxf5FucubTQ7jNyhP1b/J2VtMcR8rcw7StA46BlVMLDqYKLnarhF/sZxDeWbNmzYdS5kzQgVtUlul8gptkps3YDxive3VMfXjT+G5Br/f5uAZJd7dzbaa9DNNFtAw8rfaYqbKlMkP8OqVd7WToYjll6TpIvPyhJVh5WmJ7x9MGdcBbmznWNTz2+0wN/Rx5lmZeltFPmUlUMBWft0QlU/o3rS/61IP8f5vVivjj5DWchcW0qLJzNLabSnLCaGwHacuXL/840/xl3S4PP2osi1Z3AJUaaU1nVUt0U8x8pJcxtEq42CWa5319KGNgmXbBvnADgB8AbqpKwCK6HmP4o5Su4zmrIz02x2odXy7Om0hDfBfT6SZcu3btB1V2h8pNMe1llN9OaAMpsxRoz+WQOZ7WkQL8N+pk6pQZofXORZl19VHp4RmKpQdRZm5MH9Y6LdyVlGV9qdUDHlRWdW1k2pdJUH+obJgb/tqcOIvrZZ8nhRpUbH/XWFegFfXcrLIIrZLZKDObRA56yiMWkWVquKzvpDtwjNIwrDID/2cpjdBj4QWEF5kWfb6QbkJnsbWZLtSSsiOLHZcQPufzadtI76vMQPuNyj6Pfl4rgykzynfJzIcy66UoCNLIs3EbRJmZjHQrM5vPgF59UfCj97yW+wDm4wots+2FmE7LcPV37UXRo20j8akRyPd9zUf/6HdlFsrs6ZRukBkU3QLDUMdMLOg9HAN+wVIeIfFsPy/PQeYDRTyqBaUxLLgA+23GOqDeNpV/SickvuOb0njwkaSb0CmzYCWr8gr+Ggsof6PPQ8iAygzpQ6R536rUWH8pwD9fJ9NLAWi9M46ftdmUGfp1Ky1qvdhiX9pJFq8sgvU0iDLTYx3HbY+XSdGrL4S2p/Lkpq6Nrn0leikziZcFPJKKyk3aXOF3O3lUmiZv+9TStahrlAEF7E2do6joFtAf4q/EhcZGnfUySH8N4QRkfoLfJ0lDnk2a7z6m9YnFEZWns7PWMhoAdgEw5R2SgwL5tnAM0gVBqEVR+no8JL4w59edg7xVn3c84eURP+n8P8ERivBb5Pk1fh9XM/tPEjc6b8nIC34C5b1dRMfvGyAtUV8Cj2jPaRn3I0xz02sdLL8M1o7Zgguw32asg0RlVrk9NEj094TjI/0ybJ9tZIMt/EJ9WohvGaQd7mlNumFSZUaZthMhLSgzzlOvDQ/+nynTSI5gLFvpFWi9M7abbfVyWpYdxXiJ0vVejzSEk5bGOH7B2u7E+FGv1C/xlNK1jkH7j8V79cXNSaU/pCG0Sbd5ZDotw/KLmxvqFKXdZTSM/WarQ3mV/us+C2WLfhS7UKgWbCSmHjL/VZxTztH3gr7BV8a4DSj4G5vxuYTxXmnEAQ4Wjuhi0sELDkRugHSw+sGeZiA806gxU2eBMPniBpZo6o0P+Z5OgL4T/Ds0zgndj/RT5gNQsVAuI1h0327o8Q9yTYkPcHn9vdvkVHGeQrjNjmXkMT+ybFIr5W/25TbF3YzPAPzCPYf0Ryw9DLgAZzsfBMeCbUPe6xL6l7Q/pTLgGEiywZgm3aXXa3mvMkg8nu4w5W2wTW1PNRQ2r+X7SE2X61bHNFhdHDNJHNoOVtZOI7ijc+ViwNFvMFoPhDIxf79gQqJTPMy3Hae9IWEKwPeddZDmTxXOR1bWj7yidW0ymt7klv0RfTjfSNa7uwnlWg2QjtOePrybUf41Sq/49IhCfWZubmwsy7l3vjNTivbu1drCPGYdMx6MoFpIx49QhmRhVAD+Pt2gli47oPl5zuXfeB721hLSx9xtyVEbBP7abUc/8AgpI340a4OZhEdTOcIprC4lx4UJ3r2Mc2LEHfdMCXWkI9h3joWnIf2IRGuVG3iaf6RtPF0cbSdL53RLk7Pyl/XCXJSZLv5H2Q4f6t5zFR2/SAgYv+94vn1Q6gJ4f6eMRMvqrI4V18VU0fGDksa3SkGBqaJ5x8oAf7tTPjxddM2pAzdRsOIYUP9eq0fTexi0XNbLv3eutyAUEk8wIT/ChoTNE8crjv8SacaUaKXRcg9rRKJV7OsPb7RMXtdteJ+nIVjJWhbTPEnZGFbWEOb00y4f+/pV6TyfCB8fjb+mZQRLTqptDHMj+mSmRyitN4mnLaPTYCHtJNN1a2looMDzzhKjtfWs49VudEJ5dfE/WLwfmj2OMRcLqkxqr/JJt49AES8htjgerdl2Kdyh7+KmSGic9Novu7gPSWIJss45+8uIYkhlNmKEL3jLXfMb9ANQsfQyMmaNZrzd84qIr3y5+MPDSOWVykz0P0wk+SoWhCRHvIUMfcpxzNNE/YJ+gyF+RmXD5Qp+D3hr1gD6qfS2WKKPplRmtMzsBbS4D4lEn9JuhKu56dU62Ky88gixGOEs2S6FZUp8pF/ojEsPVFxYSI9ZGvGtoL2MTfRZppvxaHAG4aAk/iyJJuZRhEPN6MAOceMvFqC/v0K7D0s023/u6HzOQPOevh1eEPy3pbc1iJ+mQu+UEiFOqXuAfhzl7Zd4LPLmd/kKnGWzDRxLpvXKfArpp0xmMaPQf6fjfVIcC9LI87IZGRkZCx38W8HbC70EYLzRw42RkZGRkZGRkZGRkZGRkZGRMQL8H5JN3DWYf/hMAAAAAElFTkSuQmCC>
+**Mappatura del Grafo:**
+- Nodi navigabili: celle di tipo `1`, `2`, `3`, `4`, `5`, `↑`, `→`, `↓`, `←`. Il modello di costo dovrà eventualmente pesare in modo diverso le celle `5` e le frecce direzionali se impongono movimenti forzati o alterano i tempi di percorrenza.
+- Nodi non navigabili (ostacoli statici): celle di tipo `0` e `5!`.
+- Ostacoli dinamici: posizioni attuali di altri agenti dedotte da `agentsSensing`.
+
+**Funzione Euristica:** distanza di Manhattan:
+
+```
+h(n) = |x1 - x2| + |y1 - y2|
+```
+
+**Struttura Output:** array sequenziale di vettori di movimento, ad esempio:
+
+```js
+['up', 'up', 'right', 'down']
+```
+
+---
+
+## 5. Esecuzione del Piano e Trigger di Replanning
+
+- **Motore di Esecuzione:** loop asincrono che processa in serie gli step dell'array fornito dal Planner.
+- **Gestione Collisioni e Lock:** le azioni di movimento occupano la cella di destinazione bloccandola. Se `emitMove` restituisce `false`, viene applicata una penalità logica.
+
+**Trigger per il Replanning:**
+
+1. **Impedimento fisico:** fallimento di `emitMove` per occupazione dinamica della tile. Implementare un delay di retry prima della ripianificazione totale.
+2. **Sottrazione dell'obiettivo:** rilevazione dell'assenza del pacco target (raccolto da un altro agente).
+3. **Decadimento dell'utilità:** il ricalcolo periodico rileva `U <= 0` per il target corrente.
+4. **Opportunità superiore:** rilevazione sensoriale di un nuovo pacco con `U_new > U_current + soglia_tolleranza`, per evitare oscillazioni decisionali continue.
+
+---
+
+## 6. Piano Strutturale di Sviluppo
+
+1. **Inizializzazione (Bootstrap):** configurazione ambiente, connessione WebSocket, listener su `map`, inizializzazione mapping delle tile navigabili e non navigabili.
+2. **Modulo di Memoria (Beliefs):** creazione delle classi di gestione dello stato per calcolare asincronamente i tick del mondo non osservato.
+3. **Algoritmo di Navigazione (Planner):** implementazione di A* con euristica Manhattan, adattato per gestire i nuovi tipi di tile (frecce direzionali, ecc.).
+4. **Motore di Deliberazione:** scrittura dell'algoritmo di scoring per l'applicazione della funzione di utilità sull'array globale dei Beliefs.
+5. **Loop Operativo:** integrazione di esecuzione asincrona, controllo fallimenti e innesco eventi di Replanning.
