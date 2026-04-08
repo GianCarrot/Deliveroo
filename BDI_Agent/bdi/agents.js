@@ -7,14 +7,65 @@ export class BDIAgent {
         this.beliefs = beliefs;
     }
 
+    reviseAgents(perceivedAgents) {
+        const now = Date.now();
+        const currentNames = perceivedAgents.map(a => a.name);
+
+        // --- 1. Analysis of agents connected ---
+        perceivedAgents.forEach(a => {
+            const oldB = this.beliefs.agents.get(a.name);
+
+            if (!oldB) {
+                console.log('Hello', a.name);
+            } else {
+                const moved = oldB.x !== a.x || oldB.y !== a.y;
+                const seenJustBefore = this.beliefs.lastPerceptionAgents.includes(a.name);
+
+                if (seenJustBefore) {
+                    if (moved) console.log('You are moving', a.name);
+                    else console.log('You are still in same place as before');
+                } else {
+                    if (moved) console.log('Welcome back, seems that moved', a.name);
+                    else console.log('Welcome back, seems you are still here as before', a.name);
+                }
+            }
+            // Updating beliefs
+            this.beliefs.agents.set(a.name, { x: a.x, y: a.y, timestamp: now });
+        });
+
+        // --- 2. Forgetting of disconnected agents ---
+        for (let [name, b] of this.beliefs.agents) {
+            if (currentNames.includes(name)) continue;
+
+            const wasSeenJustBefore = this.beliefs.lastPerceptionAgents.includes(name);
+            // Calcolo distanza tra me e dove ricordo fosse l'agente
+            const dist = Math.abs(this.beliefs.me.x - b.x) + Math.abs(this.beliefs.me.y - b.y);
+
+            if (wasSeenJustBefore) {
+                console.log('Bye', name);
+            } else if (dist <= 3) {
+                console.log(`I remember ${name} was within 3 tiles from here. Forget him.`);
+                this.beliefs.agents.delete(name);
+            } else {
+                console.log(`Its a while that I don't see ${name}, I remember him in ${b.x},${b.y}`);
+            }
+        }
+
+        // Store names for the next loop
+        this.beliefs.lastPerceptionAgents = currentNames;
+    }
+    
     deliberate() {
-        if (desires.deliverParcel(this.beliefs)) return "deliverParcel";
-        if (desires.pickParcel(this.beliefs)) return "pickParcel";
+        if (desires.deliverParcel(this.beliefs)) 
+            return "deliverParcel";
+        if (desires.pickParcel(this.beliefs)) 
+            return "pickParcel";
         return null;
     }
 
     async execute(intention) {
-        if (!intention) return;
+        if (!intention) 
+            return;
         await intentions[intention](this);
     }
 
