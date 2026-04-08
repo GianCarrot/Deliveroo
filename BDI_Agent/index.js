@@ -3,7 +3,7 @@ dotenv.config();
 
 import { connect } from "./deliveroo/connection.js";
 import { Beliefs } from "./bdi/beliefs.js";
-import { BDIAgent } from "./bdi/agent.js";
+import { BDIAgent } from "./bdi/agents.js";
 
 const socket = connect();
 const beliefs = new Beliefs();
