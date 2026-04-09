@@ -10,13 +10,34 @@ const beliefs = new Beliefs();
 const agent = new BDIAgent(socket, beliefs);
 
 // Event listeners
-socket.on("you", (id, name, x, y) => {
-    beliefs.me = { x, y };
+socket.on("you", (id, name, x, y, score, carrying) => {
+    beliefs.me.id = id;
+    beliefs.me.x = x;
+    beliefs.me.y = y;
+    beliefs.me.score = score;
+    beliefs.me.carrying = beliefs.parcels.filter(p => p.carriedBy === id).length;
+    console.log("You:", beliefs.me);
+});
+
+socket.on("map", (width, height, tiles) => {
+    beliefs.map = tiles;
+    console.log("Map received:", tiles.length, "tiles");
 });
 
 socket.on("parcelsSensing", parcels => {
     beliefs.parcels = parcels;
+    console.log("Parcels:", parcels);
 });
 
-// Ciclo BDI ogni 200ms
-setInterval(() => agent.step(), 200);
+socket.on("agentsSensing", async () => {
+    console.log("Tick: agentsSensing");
+    await agent.step();
+});
+
+socket.on("connect", () => {
+    console.log("✓ Connected to server!");
+});
+
+socket.on("connect_error", (err) => {
+    console.log("✗ Connection error:", err.message);
+});
