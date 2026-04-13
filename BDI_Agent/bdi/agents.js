@@ -34,7 +34,7 @@ export class BDIAgent {
     }
 
     async moveTowardDeliveryTile() {
-        const delivery = this.beliefs.map.find(t => t.type === "2");
+        const delivery = this.beliefs.tiles.find(t => t.type === "2");
         if (!delivery) 
             return;
         await this.moveToward(delivery.x, delivery.y);

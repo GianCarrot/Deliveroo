@@ -9,15 +9,22 @@ const socket = connect();
 const beliefs = new Beliefs();
 const agent = new BDIAgent(socket, beliefs);
 
-console.log(socket, beliefs, agent);
-
 // Stato precedente per evitare log ripetuti
 let lastPos = { x: null, y: null };
-let lastCarrying = 0;
 
-// Event listeners
+// ─── Event Listeners ─────────────────────────────────
+
+socket.on("config", (config) => {
+    beliefs.updateConfig(config);
+});
+
+socket.on("map", (width, height, tiles) => {
+    beliefs.updateMap(width, height, tiles);
+});
+
 socket.on("you", (me) => {
     beliefs.me.id = me.id;
+    beliefs.me.name = me.name;
     beliefs.me.x = me.x;
     beliefs.me.y = me.y;
     beliefs.me.score = me.score;
@@ -30,12 +37,6 @@ socket.on("you", (me) => {
     }
 });
 
-socket.on("map", (width, height, tiles) => {
-    beliefs.map = tiles;
-    console.log("Map received:", tiles.length, "tiles");
-});
-
-// L'SDK emette un unico evento "sensing" con { parcels, agents, positions, crates }
 socket.on("sensing", async (sensing) => {
     const { parcels, agents } = sensing;
 
@@ -47,8 +48,9 @@ socket.on("sensing", async (sensing) => {
         }
     }
 
-    // TODO: riattivare quando il motore di deliberazione sarà pronto
-    // await agent.step();
+    if (agents) {
+        beliefs.updateAgents(agents);
+    }
 });
 
 socket.on("connect", () => {
