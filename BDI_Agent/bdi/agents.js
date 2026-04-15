@@ -8,13 +8,16 @@ export class BDIAgent {
     }
 
     deliberate() {
-        if (desires.deliverParcel(this.beliefs)) return "deliverParcel";
-        if (desires.pickParcel(this.beliefs)) return "pickParcel";
+        if (desires.deliverParcel(this.beliefs)) 
+            return "deliverParcel";
+        if (desires.pickParcel(this.beliefs)) 
+            return "pickParcel";
         return null;
     }
 
     async execute(intention) {
-        if (!intention) return;
+        if (!intention) 
+            return;
         await intentions[intention](this);
     }
 
@@ -25,9 +28,9 @@ export class BDIAgent {
     }
 
     async moveTowardNearestParcel() {
-        const me = this.beliefs.me;
         const parcels = this.beliefs.parcels;
-        if (parcels.length === 0) return;
+        if (parcels.length === 0) 
+            return;
 
         const p = parcels[0]; // greedy
         await this.moveToward(p.x, p.y);
@@ -44,16 +47,11 @@ export class BDIAgent {
         const me = this.beliefs.me;
 
         let dir = null;
-        if (tx > me.x) 
-            dir = "right";
-        else if (tx < me.x) 
-            dir = "left";
-        else if (ty > me.y) 
-            dir = "up";
-        else if (ty < me.y) 
-            dir = "down";
+        if (tx > me.x) dir = "right";
+        else if (tx < me.x) dir = "left";
+        else if (ty > me.y) dir = "up";
+        else if (ty < me.y) dir = "down";
 
-        if (dir) 
-            await this.socket.emitMove(dir);
+        if (dir) await this.socket.emitMove(dir);
     }
 }

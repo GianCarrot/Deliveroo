@@ -10,12 +10,13 @@ const beliefs = new Beliefs();
 const agent = new BDIAgent(socket, beliefs);
 
 // Event listeners
-socket.on("you", (id, name, x, y, score, carrying) => {
-    beliefs.me.id = id;
-    beliefs.me.x = x;
-    beliefs.me.y = y;
-    beliefs.me.score = score;
-    beliefs.me.carrying = beliefs.parcels.filter(p => p.carriedBy === id).length;
+socket.on("you", (player) => {
+    beliefs.me.id = player.id;
+    beliefs.me.x = player.x;
+    beliefs.me.y = player.y;
+    beliefs.me.score = player.score;
+    beliefs.me.carrying = player.carriedParcels?.length ?? 0;
+
     console.log("You:", beliefs.me);
 });
 
