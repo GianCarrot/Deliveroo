@@ -54,6 +54,19 @@ export class BDIAgent {
         // Store names for the next loop
         this.beliefs.lastPerceptionAgents = currentNames;
     }
+
+    getNearestParcel() {
+        const me = this.beliefs.me;
+        const parcels = this.beliefs.parcels;
+
+        return parcels
+            .filter(p => !p.carriedBy)
+            .sort((a, b) => {
+                const d1 = Math.abs(a.x - me.x) + Math.abs(a.y - me.y);
+                const d2 = Math.abs(b.x - me.x) + Math.abs(b.y - me.y);
+                return d1 - d2;
+            })[0];
+    }
     
     deliberate() {
         if (desires.deliverParcel(this.beliefs)) 
@@ -76,11 +89,8 @@ export class BDIAgent {
     }
 
     async moveTowardNearestParcel() {
-        const me = this.beliefs.me;
-        const parcels = this.beliefs.parcels;
-        if (parcels.length === 0) return;
-
-        const p = parcels[0]; // greedy
+        const p = this.getNearestParcel();
+        if (!p) return;
         await this.moveToward(p.x, p.y);
     }
 
