@@ -6,9 +6,9 @@
  */
 
 /**
- * Converte un IOClockEvent ('1s', '2s', '5s', '10s', 'infinite') in millisecondi.
+ * Converts an IOClockEvent ('1s', '2s', '5s', '10s', 'infinite') to milliseconds.
  * @param {string} clockEvent
- * @returns {number|null} millisecondi, oppure null se 'infinite' (nessun decay)
+ * @returns {number|null} milliseconds, or null if 'infinite' (no decay)
  */
 function clockEventToMs(clockEvent) {
     const mapping = {
@@ -23,7 +23,7 @@ function clockEventToMs(clockEvent) {
 
 export class Beliefs {
     constructor() {
-        // --- Agente ---
+        // --- Agent ---
         this.me = {
             id: null,
             name: null,
@@ -33,27 +33,27 @@ export class Beliefs {
             score: 0
         };
 
-        // --- Mappa ---
+        // --- Map ---
         this.mapWidth = 0;
         this.mapHeight = 0;
         this.tiles = [];
-        /** @type {Set<string>} Chiavi "x,y" delle tile di consegna (tipo '2') */
+        /** @type {Set<string>} Keys "x,y" of delivery tiles (type '2') */
         this.deliveryTiles = new Set();
-        /** @type {Set<string>} Chiavi "x,y" delle tile navigabili (tipo != '0' e != '5!') */
+        /** @type {Set<string>} Keys "x,y" of walkable tiles (type != '0' and != '5!') */
         this.walkableTiles = new Set();
 
-        // --- Pacchi ---
-        /** @type {Map<string, Object>} id -> parcel data con lastSeen e originalReward */
+        // --- Parcels ---
+        /** @type {Map<string, Object>} id -> parcel data with lastSeen and originalReward */
         this.parcelsMap = new Map();
 
-        // --- Agenti ---
-        /** @type {Map<string, IOAgent>} id -> dati agente */
+        // --- Agents ---
+        /** @type {Map<string, IOAgent>} id -> agent data */
         this.agentsMap = new Map();
 
-        // --- Configurazione (valori di default, aggiornati da updateConfig) ---
-        /** @type {number|'infinite'} Distanza di osservazione (Manhattan) */
+        // --- Configuration (default values, updated by updateConfig) ---
+        /** @type {number|'infinite'} Observation distance (Manhattan) */
         this.observationDistance = 5;
-        /** @type {number|null} Intervallo di decay del reward in ms, null = nessun decay */
+        /** @type {number|null} Reward decay interval in ms, null = no decay */
         this.parcelDecayIntervalMs = 1000;
     }
 
@@ -62,7 +62,7 @@ export class Beliefs {
     // ─────────────────────────────────────────────
 
     /**
-     * Aggiorna i parametri di gioco dalla configurazione del server.
+     * Updates game parameters from the server configuration.
      * @param {IOConfig} config
      */
     updateConfig(config) {
@@ -86,7 +86,7 @@ export class Beliefs {
     // ─────────────────────────────────────────────
 
     /**
-     * Inizializza la struttura mappa con le tile navigabili e di consegna.
+     * Initializes the map structure with walkable and delivery tiles.
      * @param {number} width
      * @param {number} height
      * @param {IOTile[]} tiles
@@ -119,19 +119,19 @@ export class Beliefs {
     // ─────────────────────────────────────────────
 
     /**
-     * Aggiorna lo stato dei beliefs con i nuovi dati visivi sui pacchi.
-     * Implementa belief revision con forgetting come da requisiti sezione 2.
+     * Updates the belief state with new visual data about parcels.
+     * Implements belief revision with forgetting as per section 2 requirements.
      * @param {IOParcel[]} visibleParcels
      */
     updateParcels(visibleParcels) {
         const now = Date.now();
 
-        // Calcola le tile visibili in base alla observation distance
+        // Calculate visible tiles based on observation distance
         const visibleCells = this._getVisibleCells();
 
-        // Aggiungo o aggiorno i pacchi attualmente visibili
+        // Add or update currently visible parcels
         for (const p of visibleParcels) {
-            // Ignora pacchi portati da altri agenti
+            // Ignore parcels carried by other agents
             if (p.carriedBy && p.carriedBy !== this.me.id) continue;
 
             this.parcelsMap.set(p.id, {
@@ -141,11 +141,11 @@ export class Beliefs {
             });
         }
 
-        // Logica di Forgetting
+        // Forgetting Logic
         const visibleParcelIds = new Set(visibleParcels.map(p => p.id));
 
         for (const [id, p] of this.parcelsMap.entries()) {
-            // 1. Dimentico se il pacco è scaduto (solo se c'è decay)
+            // Forget if the parcel has expired (only if decay is active)
             if (this.parcelDecayIntervalMs !== null) {
                 const decayTicks = Math.floor((now - p.lastSeen) / this.parcelDecayIntervalMs);
                 const currentReward = p.originalReward - decayTicks;
@@ -155,7 +155,7 @@ export class Beliefs {
                 }
             }
 
-            // 2. Dimentico se mi aspetto il pacco in (x,y) che è nel mio campo visivo ma non lo vedo
+            // Forget if the parcel is expected at (x,y) which is in my field of view but I don't see it
             const cellKey = `${p.x},${p.y}`;
             if (visibleCells === null || visibleCells.has(cellKey)) {
                 if (!visibleParcelIds.has(id)) {
@@ -166,7 +166,7 @@ export class Beliefs {
     }
 
     /**
-     * Ritorna l'array valutato dinamicamente con il decay del tempo.
+     * Returns the dynamically evaluated array with time decay applied.
      * @returns {Object[]}
      */
     get parcels() {
@@ -194,22 +194,22 @@ export class Beliefs {
     // ─────────────────────────────────────────────
 
     /**
-     * Aggiorna le posizioni degli altri agenti.
-     * Rimuove agenti che erano nel campo visivo ma non appaiono più.
+     * Updates the positions of other agents.
+     * Removes agents that were in the field of view but no longer appear.
      * @param {IOAgent[]} visibleAgents
      */
     updateAgents(visibleAgents) {
         const visibleCells = this._getVisibleCells();
         const visibleAgentIds = new Set();
 
-        // Aggiorna o aggiungi agenti visibili (escluso se stesso)
+        // Update or add visible agents (excluding self)
         for (const agent of visibleAgents) {
             if (agent.id === this.me.id) continue;
             visibleAgentIds.add(agent.id);
             this.agentsMap.set(agent.id, { ...agent, lastSeen: Date.now() });
         }
 
-        // Forgetting: rimuovi agenti che dovrebbero essere visibili ma non lo sono
+        // Forgetting: remove agents that should be visible but are not
         for (const [id, agent] of this.agentsMap.entries()) {
             if (visibleAgentIds.has(id)) continue;
             const cellKey = `${Math.round(agent.x)},${Math.round(agent.y)}`;
@@ -220,7 +220,7 @@ export class Beliefs {
     }
 
     /**
-     * Getter per l'array degli agenti tracciati.
+     * Getter for the array of tracked agents.
      * @returns {Object[]}
      */
     get agents() {
@@ -228,15 +228,15 @@ export class Beliefs {
     }
 
     // ─────────────────────────────────────────────
-    //  UTILITY INTERNE
+    //  INTERNAL UTILITIES
     // ─────────────────────────────────────────────
 
     /**
-     * Calcola le celle visibili dall'agente in base all'observation distance.
-     * @returns {Set<string>|null} Set di chiavi "x,y", oppure null se tutto è visibile
+     * Calculates the cells visible by the agent based on observation distance.
+     * @returns {Set<string>|null} Set of "x,y" keys, or null if everything is visible
      */
     _getVisibleCells() {
-        if (this.observationDistance === Infinity) return null; // tutto visibile
+        if (this.observationDistance === Infinity) return null; // everything visible
 
         const myX = Math.round(this.me.x);
         const myY = Math.round(this.me.y);
