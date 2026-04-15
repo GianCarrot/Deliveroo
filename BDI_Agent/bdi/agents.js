@@ -105,16 +105,11 @@ export class BDIAgent {
         const me = this.beliefs.me;
 
         let dir = null;
-        if (tx > me.x) 
-            dir = "right";
-        else if (tx < me.x) 
-            dir = "left";
-        else if (ty > me.y) 
-            dir = "up";
-        else if (ty < me.y) 
-            dir = "down";
+        if (tx > me.x) dir = "right";
+        else if (tx < me.x) dir = "left";
+        else if (ty > me.y) dir = "up";
+        else if (ty < me.y) dir = "down";
 
-        if (dir) 
-            await this.socket.emitMove(dir);
+        if (dir) await this.socket.emitMove(dir);
     }
 }
