@@ -113,3 +113,4 @@ h(n) = |x1 - x2| + |y1 - y2|
 3. **Algoritmo di Navigazione (Planner):** implementazione di A* con euristica Manhattan, adattato per gestire i nuovi tipi di tile (frecce direzionali, ecc.).
 4. **Motore di Deliberazione:** scrittura dell'algoritmo di scoring per l'applicazione della funzione di utilità sull'array globale dei Beliefs.
 5. **Loop Operativo:** integrazione di esecuzione asincrona, controllo fallimenti e innesco eventi di Replanning.
+6. **Fase di test e revisione:** test dell'agente in Deliveroo.js e revisione del codice affinché rispetti i principi di Ingegneria del Software.
