@@ -1,5 +1,6 @@
 import { desires } from "./desires.js";
 import { intentions } from "./intentions.js";
+import { aStar } from "./pathfinding.js";
 
 export class BDIAgent {
     constructor(socket, beliefs) {
@@ -61,13 +62,14 @@ export class BDIAgent {
 
         return parcels
             .filter(p => !p.carriedBy)
+            .filter(p => this.beliefs.walkableTiles.has(`${Math.round(p.x)},${Math.round(p.y)}`))
             .sort((a, b) => {
                 const d1 = Math.abs(a.x - me.x) + Math.abs(a.y - me.y);
                 const d2 = Math.abs(b.x - me.x) + Math.abs(b.y - me.y);
                 return d1 - d2;
             })[0];
     }
-    
+
     deliberate() {
         if (desires.deliverParcel(this.beliefs)) 
             return "deliverParcel";
@@ -102,14 +104,30 @@ export class BDIAgent {
     }
 
     async moveToward(tx, ty) {
+
+        tx = Math.round(tx);
+        ty = Math.round(ty);
+
         const me = this.beliefs.me;
+        const start = { x: Math.round(me.x), y: Math.round(me.y) };
+        const goal = { x: tx, y: ty };
+
+        const path = aStar(start, goal, this.beliefs);
+
+        console.log("A* path:", path);
+
+        if (!path || path.length < 2)
+            return;
+
+        const next = path[1];
 
         let dir = null;
-        if (tx > me.x) dir = "right";
-        else if (tx < me.x) dir = "left";
-        else if (ty > me.y) dir = "up";
-        else if (ty < me.y) dir = "down";
+        if (next.x > start.x) dir = "right";
+        else if (next.x < start.x) dir = "left";
+        else if (next.y > start.y) dir = "up";
+        else if (next.y < start.y) dir = "down";
 
-        if (dir) await this.socket.emitMove(dir);
+        if (dir)
+            await this.socket.emitMove(dir);
     }
 }
