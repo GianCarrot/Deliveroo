@@ -1,5 +1,6 @@
 import { desires } from "./desires.js";
 import { intentions } from "./intentions.js";
+import { aStar } from "./pathfinding.js";
 
 export class BDIAgent {
     constructor(socket, beliefs) {
@@ -61,20 +62,28 @@ export class BDIAgent {
 
         return parcels
             .filter(p => !p.carriedBy)
+            .filter(p => this.beliefs.walkableTiles.has(`${Math.round(p.x)},${Math.round(p.y)}`))
             .sort((a, b) => {
                 const d1 = Math.abs(a.x - me.x) + Math.abs(a.y - me.y);
                 const d2 = Math.abs(b.x - me.x) + Math.abs(b.y - me.y);
                 return d1 - d2;
             })[0];
     }
-    
+
     deliberate() {
-        if (desires.deliverParcel(this.beliefs)) 
-            return "deliverParcel";
-        if (desires.pickParcel(this.beliefs)) 
+        // se ho un target → continuo con quello
+        if (this.beliefs.currentTarget)
             return "pickParcel";
-        return null;
+
+        if (desires.deliverParcel(this.beliefs))
+            return "deliverParcel";
+
+        if (desires.pickParcel(this.beliefs))
+            return "pickParcel";
+
+        return "wander";
     }
+
 
     async execute(intention) {
         if (!intention) 
@@ -83,6 +92,11 @@ export class BDIAgent {
     }
 
     async step() {
+        if (this.beliefs.currentTarget) {
+            await this.moveTowardTarget();
+            return;
+        }
+
         const intention = this.deliberate();
         console.log("Intention:", intention);
         await this.execute(intention);
@@ -90,7 +104,8 @@ export class BDIAgent {
 
     async moveTowardNearestParcel() {
         const p = this.getNearestParcel();
-        if (!p) return;
+        if (!p) 
+            return;
         await this.moveToward(p.x, p.y);
     }
 
@@ -102,14 +117,77 @@ export class BDIAgent {
     }
 
     async moveToward(tx, ty) {
+
+        tx = Math.round(tx);
+        ty = Math.round(ty);
+
         const me = this.beliefs.me;
+        const start = { x: Math.round(me.x), y: Math.round(me.y) };
+        const goal = { x: tx, y: ty };
+
+        const path = aStar(start, goal, this.beliefs);
+
+        console.log("A* path:", path);
+
+        if (!path || path.length < 2)
+            return;
+
+        const next = path[1];
 
         let dir = null;
-        if (tx > me.x) dir = "right";
-        else if (tx < me.x) dir = "left";
-        else if (ty > me.y) dir = "up";
-        else if (ty < me.y) dir = "down";
+        if (next.x > start.x) dir = "right";
+        else if (next.x < start.x) dir = "left";
+        else if (next.y > start.y) dir = "up";
+        else if (next.y < start.y) dir = "down";
 
-        if (dir) await this.socket.emitMove(dir);
+        if (dir)
+            await this.socket.emitMove(dir);
+        
+        // --- TENTATIVO DI MOVIMENTO ---
+        const oldX = this.beliefs.me.x;
+        const oldY = this.beliefs.me.y;
+
+        await this.socket.emitMove(dir);
+
+        // Aspetta il prossimo sensing
+        await new Promise(res => setTimeout(res, 80));
+
+        const newX = this.beliefs.me.x;
+        const newY = this.beliefs.me.y;
+
+        // --- SE NON SI È MOSSO → fallback ---
+        if (Math.round(newX) === Math.round(oldX) &&
+            Math.round(newY) === Math.round(oldY)) {
+
+            console.log("Movement blocked → fallback");
+
+            // fallback: prova a retrocedere
+            const fallbackDirs = {
+                up: "down",
+                down: "up",
+                left: "right",
+                right: "left"
+            };
+
+            const back = fallbackDirs[dir];
+            await this.socket.emitMove(back);
+        }
     }
+
+    async moveTowardTarget() {
+        const t = this.beliefs.currentTarget;
+
+        if (!t) 
+            return;
+
+        await this.moveToward(t.x, t.y);
+
+        if (Math.round(this.beliefs.me.x) === t.x && 
+        Math.round(this.beliefs.me.y) === t.y) {
+            await this.socket.emitPickup();
+            this.beliefs.currentTarget = null;
+        }
+    }
+
+    
 }

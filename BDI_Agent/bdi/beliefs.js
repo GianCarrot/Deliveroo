@@ -17,7 +17,8 @@ function clockEventToMs(clockEvent) {
         '5s': 5000,
         '10s': 10000,
     };
-    if (clockEvent === 'infinite') return null;
+    if (clockEvent === 'infinite') 
+        return null;
     return mapping[clockEvent] ?? 1000; // default 1s
 }
 
@@ -55,6 +56,9 @@ export class Beliefs {
         this.observationDistance = 5;
         /** @type {number|null} Reward decay interval in ms, null = no decay */
         this.parcelDecayIntervalMs = 1000;
+
+        // --- Target --
+        this.currentTarget = null;
     }
 
     // ─────────────────────────────────────────────

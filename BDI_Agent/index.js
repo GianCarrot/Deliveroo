@@ -24,6 +24,7 @@ socket.on("map", (width, height, tiles) => {
     beliefs.updateMap(width, height, tiles);
 });
 
+
 socket.on("you", (me) => {
     beliefs.me.id = me.id;
     beliefs.me.name = me.name;
@@ -53,6 +54,8 @@ socket.on("sensing", async (sensing) => {
     if (agents) {
         beliefs.updateAgents(agents);
     }
+
+    await agent.step();
 });
 
 socket.on("connect", () => {
