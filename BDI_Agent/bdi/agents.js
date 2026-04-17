@@ -71,12 +71,19 @@ export class BDIAgent {
     }
 
     deliberate() {
-        if (desires.deliverParcel(this.beliefs)) 
-            return "deliverParcel";
-        if (desires.pickParcel(this.beliefs)) 
+        // se ho un target → continuo con quello
+        if (this.beliefs.currentTarget)
             return "pickParcel";
-        return null;
+
+        if (desires.deliverParcel(this.beliefs))
+            return "deliverParcel";
+
+        if (desires.pickParcel(this.beliefs))
+            return "pickParcel";
+
+        return "wander";
     }
+
 
     async execute(intention) {
         if (!intention) 
@@ -85,6 +92,11 @@ export class BDIAgent {
     }
 
     async step() {
+        if (this.beliefs.currentTarget) {
+            await this.moveTowardTarget();
+            return;
+        }
+
         const intention = this.deliberate();
         console.log("Intention:", intention);
         await this.execute(intention);
@@ -92,7 +104,8 @@ export class BDIAgent {
 
     async moveTowardNearestParcel() {
         const p = this.getNearestParcel();
-        if (!p) return;
+        if (!p) 
+            return;
         await this.moveToward(p.x, p.y);
     }
 
@@ -129,5 +142,52 @@ export class BDIAgent {
 
         if (dir)
             await this.socket.emitMove(dir);
+        
+        // --- TENTATIVO DI MOVIMENTO ---
+        const oldX = this.beliefs.me.x;
+        const oldY = this.beliefs.me.y;
+
+        await this.socket.emitMove(dir);
+
+        // Aspetta il prossimo sensing
+        await new Promise(res => setTimeout(res, 80));
+
+        const newX = this.beliefs.me.x;
+        const newY = this.beliefs.me.y;
+
+        // --- SE NON SI È MOSSO → fallback ---
+        if (Math.round(newX) === Math.round(oldX) &&
+            Math.round(newY) === Math.round(oldY)) {
+
+            console.log("Movement blocked → fallback");
+
+            // fallback: prova a retrocedere
+            const fallbackDirs = {
+                up: "down",
+                down: "up",
+                left: "right",
+                right: "left"
+            };
+
+            const back = fallbackDirs[dir];
+            await this.socket.emitMove(back);
+        }
     }
+
+    async moveTowardTarget() {
+        const t = this.beliefs.currentTarget;
+
+        if (!t) 
+            return;
+
+        await this.moveToward(t.x, t.y);
+
+        if (Math.round(this.beliefs.me.x) === t.x && 
+        Math.round(this.beliefs.me.y) === t.y) {
+            await this.socket.emitPickup();
+            this.beliefs.currentTarget = null;
+        }
+    }
+
+    
 }
