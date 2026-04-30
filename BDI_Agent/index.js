@@ -9,6 +9,8 @@ const socket = connect();
 const beliefs = new Beliefs();
 const agent = new BDIAgent(socket, beliefs);
 
+console.log(socket, beliefs, agent)
+
 // Stato precedente per evitare log ripetuti
 let lastPos = { x: null, y: null };
 
@@ -21,6 +23,7 @@ socket.on("config", (config) => {
 socket.on("map", (width, height, tiles) => {
     beliefs.updateMap(width, height, tiles);
 });
+
 
 socket.on("you", (me) => {
     beliefs.me.id = me.id;
@@ -51,6 +54,8 @@ socket.on("sensing", async (sensing) => {
     if (agents) {
         beliefs.updateAgents(agents);
     }
+
+    await agent.step();
 });
 
 socket.on("connect", () => {
