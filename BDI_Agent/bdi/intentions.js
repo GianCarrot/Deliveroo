@@ -2,13 +2,13 @@ export const intentions = {
     pickParcel: async (agent) => {
         console.log("Intent: pick parcel");
 
-        // se ho già un target → continua verso quello
+        // if I already have a target → continue towards that
         if (agent.beliefs.currentTarget) {
             await agent.moveTowardTarget();
             return;
         }
 
-        // altrimenti scelgo il più vicino
+        // otherwise I choose the nearest one
         const p = agent.getNearestParcel();
         if (!p) return;
 

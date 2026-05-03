@@ -17,7 +17,7 @@ export class BDIAgent {
 
     manhattan(a, b) {
         return Math.abs(Math.round(a.x) - Math.round(b.x)) +
-               Math.abs(Math.round(a.y) - Math.round(b.y));
+            Math.abs(Math.round(a.y) - Math.round(b.y));
     }
 
     /**
@@ -246,10 +246,10 @@ export class BDIAgent {
 
         // Otherwise, pick a random direction that leads to a walkable tile
         const dirMap = [
-            { dir: "up",    dx: 0,  dy: 1 },
-            { dir: "down",  dx: 0,  dy: -1 },
-            { dir: "left",  dx: -1, dy: 0 },
-            { dir: "right", dx: 1,  dy: 0 },
+            { dir: "up", dx: 0, dy: 1 },
+            { dir: "down", dx: 0, dy: -1 },
+            { dir: "left", dx: -1, dy: 0 },
+            { dir: "right", dx: 1, dy: 0 },
         ];
 
         const walkable = dirMap.filter(({ dx, dy }) => {
@@ -442,7 +442,7 @@ export class BDIAgent {
             }
         } catch (e) {
             console.error("Error in step():", e);
-            // CRITICAL: clear intention on error so the BDI cycle restarts
+            // Clear intention on error so the BDI cycle restarts
             this.intention = null;
             this.plan = [];
         } finally {
