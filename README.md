@@ -15,8 +15,10 @@ BDI_Agent/
 ├── .env                # Environment variables (Server URL, Authentication Tokens)
 ├── index.js            # Application entry point: initializes the socket, handles server events (config, map, sensing), and triggers the agent loop.
 └── bdi/
-    ├── agents.js       # Core BDIAgent class. Handles deliberation, utility scoring, replanning triggers, and the main execution loop (step).
+    ├── agents.js       # Core BDIAgent class. Coordinates the BDI cycle: delegates to desires/intentions, handles replanning triggers, and runs the execution loop.
     ├── beliefs.js      # Beliefs class. Manages the agent's memory: parses the map, tracks parcels/agents, and implements "forgetting" logic.
+    ├── desires.js      # Desires module. Evaluates the beliefs and computes utility scores to propose a set of prioritized goal candidates.
+    ├── intentions.js   # Intentions module. Maps selected goals (pickParcel, deliverParcel, wander) to concrete actionable plans using A*.
     └── pathfinding.js  # A* search algorithm adapted for Deliveroo constraints (dynamic obstacles and one-way arrows).
 ```
 

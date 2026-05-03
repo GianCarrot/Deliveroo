@@ -1,4 +1,4 @@
-import { desires } from "./desires.js";
+import { getDesires } from "./desires.js";
 import { intentions } from "./intentions.js";
 
 import { aStar } from "./pathfinding.js";
@@ -81,48 +81,8 @@ export class BDIAgent {
     // ---------- DELIBERATION (UTILITY-BASED) ----------
 
     deliberate() {
-        const me = this.beliefs.me;
-        const parcels = this.beliefs.parcels || [];
-        const candidates = [];
-
-        // 1. Evaluate all uncarried parcels for pickup
-        for (const p of parcels) {
-            if (p.carriedBy) continue;
-
-            const U = this.computeParcelUtility(p);
-
-            if (U > 0) {
-                candidates.push({ type: "pickParcel", target: p, utility: U });
-            }
-        }
-
-        // 2. Evaluate delivery if we carry anything
-        if (this.beliefs.carriedCount > 0 || this.beliefs.me.carrying > 0) {
-            const nearestDelivery = this.getNearestDeliveryTile();
-            if (nearestDelivery) {
-                let totalReward = 0;
-                for (const p of parcels) {
-                    if (this.beliefs.carriedParcels.includes(p.id)) {
-                        totalReward += p.reward;
-                    }
-                }
-                const myPos = { x: Math.round(me.x), y: Math.round(me.y) };
-                const deliveryCost = this.manhattan(myPos, nearestDelivery);
-                const uDelivery = totalReward - deliveryCost;
-
-                if (uDelivery > 0) {
-                    candidates.push({ type: "deliverParcel", utility: uDelivery });
-                } else {
-                    // Fallback to guarantee we eventually deliver if we carry stuff
-                    candidates.push({ type: "deliverParcel", utility: 1 });
-                }
-            }
-        }
-
-        if (candidates.length === 0) {
-            return { type: "wander" };
-        }
-
+        const candidates = getDesires(this);
+        if (candidates.length === 0) return { type: "wander", utility: 0 };
         candidates.sort((a, b) => b.utility - a.utility);
         return candidates[0];
     }
@@ -184,48 +144,9 @@ export class BDIAgent {
     // ---------- PLANNER ----------
 
     async planFor(intention) {
-
-        if (intention.type === "pickParcel") {
-            const goal = intention.target;
-            if (!goal) return [];
-            const start = { x: Math.round(this.beliefs.me.x), y: Math.round(this.beliefs.me.y) };
-            const goalRounded = { x: Math.round(goal.x), y: Math.round(goal.y) };
-            const path = aStar(start, goalRounded, this.beliefs);
-            if (!path) {
-                console.log("A* path (pickParcel): no path found");
-                return [];
-            }
-            console.log("A* path (pickParcel):", path.length, "nodes");
-            const actions = this.pathToActions(path);
-            // Append pickup action at the destination
-            actions.push({ action: "pickup" });
-            return actions;
+        if (intentions[intention.type]) {
+            return await intentions[intention.type](this, intention);
         }
-
-        if (intention.type === "deliverParcel") {
-            const goal = this.getNearestDeliveryTile();
-            if (!goal) {
-                console.log("No delivery tile found on the map");
-                return [];
-            }
-            const start = { x: Math.round(this.beliefs.me.x), y: Math.round(this.beliefs.me.y) };
-            const goalRounded = { x: Math.round(goal.x), y: Math.round(goal.y) };
-            const path = aStar(start, goalRounded, this.beliefs);
-            if (!path) {
-                console.log("A* path (deliverParcel): no path found");
-                return [];
-            }
-            console.log("A* path (deliverParcel):", path.length, "nodes");
-            const actions = this.pathToActions(path);
-            // Append putdown action at the delivery tile
-            actions.push({ action: "putdown" });
-            return actions;
-        }
-
-        if (intention.type === "wander") {
-            return this._planWander();
-        }
-
         return [];
     }
 
