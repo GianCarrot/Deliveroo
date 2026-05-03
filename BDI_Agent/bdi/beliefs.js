@@ -42,10 +42,14 @@ export class Beliefs {
         this.deliveryTiles = new Set();
         /** @type {Set<string>} Keys "x,y" of walkable tiles (type != '0' and != '5!') */
         this.walkableTiles = new Set();
+        /** @type {Map<string, string>} Keys "x,y" -> tile type for arrow/directional checks */
+        this.tileTypeMap = new Map();
 
         // --- Parcels ---
         /** @type {Map<string, Object>} id -> parcel data with lastSeen and originalReward */
         this.parcelsMap = new Map();
+        /** @type {string[]} IDs of parcels currently carried by the agent */
+        this.carriedParcels = [];
 
         // --- Agents ---
         /** @type {Map<string, IOAgent>} id -> agent data */
@@ -101,15 +105,17 @@ export class Beliefs {
         this.tiles = tiles;
         this.deliveryTiles.clear();
         this.walkableTiles.clear();
+        this.tileTypeMap.clear();
 
         const nonWalkable = new Set(['0', '5!']);
 
         for (const tile of tiles) {
             const key = `${tile.x},${tile.y}`;
-            if (!nonWalkable.has(tile.type)) {
+            this.tileTypeMap.set(key, String(tile.type));
+            if (!nonWalkable.has(String(tile.type))) {
                 this.walkableTiles.add(key);
             }
-            if (tile.type === '2') {
+            if (String(tile.type) === '2') {
                 this.deliveryTiles.add(key);
             }
         }
@@ -135,8 +141,6 @@ export class Beliefs {
 
         // Add or update currently visible parcels
         for (const p of visibleParcels) {
-            // Ignore parcels carried by other agents
-            if (p.carriedBy && p.carriedBy !== this.me.id) continue;
 
             this.parcelsMap.set(p.id, {
                 ...p,
@@ -160,7 +164,11 @@ export class Beliefs {
             }
 
             // Forget if the parcel is expected at (x,y) which is in my field of view but I don't see it
+            // BUT: never forget parcels at the agent's current cell (we may be about to pick them up)
             const cellKey = `${p.x},${p.y}`;
+            const myCell = `${Math.round(this.me.x)},${Math.round(this.me.y)}`;
+            if (cellKey === myCell) continue;
+
             if (visibleCells === null || visibleCells.has(cellKey)) {
                 if (!visibleParcelIds.has(id)) {
                     this.parcelsMap.delete(id);
@@ -229,6 +237,44 @@ export class Beliefs {
      */
     get agents() {
         return Array.from(this.agentsMap.values());
+    }
+
+    /**
+     * Returns the number of parcels currently carried by the agent.
+     * @returns {number}
+     */
+    get carriedCount() {
+        return this.carriedParcels.length;
+    }
+
+    /**
+     * Records parcels that were successfully picked up.
+     * @param {Array} pickedUp - Array of parcel objects returned by emitPickup()
+     */
+    addCarriedParcels(pickedUp) {
+        if (!Array.isArray(pickedUp)) return;
+        for (const p of pickedUp) {
+            if (p.id && !this.carriedParcels.includes(p.id)) {
+                this.carriedParcels.push(p.id);
+            }
+        }
+    }
+
+    /**
+     * Clears the carried parcels list after a successful putdown.
+     */
+    clearCarriedParcels() {
+        this.carriedParcels = [];
+    }
+
+    /**
+     * Returns the tile type at the given coordinates.
+     * @param {number} x
+     * @param {number} y
+     * @returns {string|undefined} tile type string, or undefined if unknown
+     */
+    getTileType(x, y) {
+        return this.tileTypeMap.get(`${x},${y}`);
     }
 
     // ─────────────────────────────────────────────

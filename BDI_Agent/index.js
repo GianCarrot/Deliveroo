@@ -9,7 +9,7 @@ const socket = connect();
 const beliefs = new Beliefs();
 const agent = new BDIAgent(socket, beliefs);
 
-console.log(socket, beliefs, agent)
+
 
 // Stato precedente per evitare log ripetuti
 let lastPos = { x: null, y: null };
@@ -41,21 +41,30 @@ socket.on("you", (me) => {
 });
 
 socket.on("sensing", async (sensing) => {
-    const { parcels, agents } = sensing;
+    try {
+        const { parcels, agents } = sensing;
 
-    if (parcels) {
-        beliefs.updateParcels(parcels);
-        if (beliefs.me.id) {
-            const carriedParcels = parcels.filter(p => p.carriedBy === beliefs.me.id);
-            beliefs.me.carrying = carriedParcels.reduce((sum, p) => sum + p.reward, 0);
+        if (parcels) {
+            beliefs.updateParcels(parcels);
+
+            // Sync carried parcels from sensing (authoritative source)
+            if (beliefs.me.id) {
+                const carriedParcels = parcels.filter(p => p.carriedBy === beliefs.me.id);
+                beliefs.me.carrying = carriedParcels.length;
+
+                // Keep carriedParcels array in sync with what the server says
+                beliefs.carriedParcels = carriedParcels.map(p => p.id);
+            }
         }
-    }
 
-    if (agents) {
-        beliefs.updateAgents(agents);
-    }
+        if (agents) {
+            beliefs.updateAgents(agents);
+        }
 
-    await agent.step();
+        await agent.step();
+    } catch (e) {
+        console.error("CRASH IN SENSING EVENT:", e);
+    }
 });
 
 socket.on("connect", () => {
