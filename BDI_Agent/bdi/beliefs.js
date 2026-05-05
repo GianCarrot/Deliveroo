@@ -126,7 +126,6 @@ export class Beliefs {
     }*/
 
     updateMap(width, height, tiles) {
-        // Calcolo reale della dimensione della mappa
         const maxX = Math.max(...tiles.map(t => t.x));
         const maxY = Math.max(...tiles.map(t => t.y));
 
@@ -151,8 +150,9 @@ export class Beliefs {
             }
         }
 
-        console.log(`Map received: ${this.mapWidth}x${this.mapHeight}, ${tiles.length} tiles`);
+        console.log(`Map received: ${this.mapWidth}x${this.mapHeight}, ${tiles.length} tiles, ${this.deliveryTiles.size} delivery`);
     }
+
 
 
     // ─────────────────────────────────────────────

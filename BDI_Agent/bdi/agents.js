@@ -1,6 +1,5 @@
 import { getDesires } from "./desires.js";
 import { intentions } from "./intentions.js";
-
 import { aStar } from "./pathfinding.js";
 
 export class BDIAgent {
@@ -11,28 +10,30 @@ export class BDIAgent {
         this.intention = null;   // { type: "...", target?, utility? }
         this.plan = [];          // [{ action: "move", dir }, ...]
         this._stepping = false;  // Mutex to prevent concurrent step() calls
+
+        // Cache per i path (per ridurre chiamate A*)
+        this.lastGoalKey = null;
+        this.cachedPath = null;
     }
 
     // ---------- UTILITIES ----------
 
     manhattan(a, b) {
         return Math.abs(Math.round(a.x) - Math.round(b.x)) +
-            Math.abs(Math.round(a.y) - Math.round(b.y));
+               Math.abs(Math.round(a.y) - Math.round(b.y));
     }
 
     /**
-     * Computes the utility of picking a parcel using A* real path cost.
-     * Returns the utility value, or -Infinity if no path exists.
+     * Computes the utility of picking a parcel.
+     * U = R_current - (Cost_travel + Cost_delivery)
      */
     computeParcelUtility(parcel) {
         const me = this.beliefs.me;
         const parcelPos = { x: Math.round(parcel.x), y: Math.round(parcel.y) };
         const myPos = { x: Math.round(me.x), y: Math.round(me.y) };
 
-        // Use Manhattan distance for fast estimation (Cost_travel)
         const travelCost = this.manhattan(myPos, parcelPos);
 
-        // Find nearest delivery from the parcel position (Cost_delivery)
         const nearestDelivery = this._nearestDeliveryFrom(parcelPos);
         const deliveryCost = nearestDelivery ? this.manhattan(parcelPos, nearestDelivery) : 0;
 
@@ -41,11 +42,11 @@ export class BDIAgent {
         return U;
     }
 
-    /**
-     * Returns the nearest delivery tile from a given position.
-     */
     _nearestDeliveryFrom(pos) {
-        const deliveries = (this.beliefs.tiles || []).filter(t => String(t.type) === "2");
+        const deliveries = Array.from(this.beliefs.deliveryTiles).map(key => {
+            const [x, y] = key.split(",").map(Number);
+            return { x, y };
+        });
         if (deliveries.length === 0) return null;
 
         return deliveries.sort((a, b) => {
@@ -56,19 +57,8 @@ export class BDIAgent {
     }
 
     getNearestDeliveryTile() {
-        const me = this.beliefs.me;
-        const deliveries = Array.from(this.beliefs.deliveryTiles).map(key => {
-            const [x, y] = key.split(",").map(Number);
-            return { x, y };
-        });
-
-        if (deliveries.length === 0) return null;
-
-        return deliveries.sort((a, b) =>
-            this.manhattan(me, a) - this.manhattan(me, b)
-        )[0];
+        return this._nearestDeliveryFrom(this.beliefs.me);
     }
-
 
     pathToActions(path) {
         if (!path || path.length < 2) return [];
@@ -98,12 +88,8 @@ export class BDIAgent {
         return candidates[0];
     }
 
-    // ---------- REPLANNING CHECKS (REQUIREMENTS §5) ----------
+    // ---------- REPLANNING CHECKS ----------
 
-    /**
-     * Checks if the current intention should be abandoned.
-     * Returns a reason string if replanning is needed, or null to continue.
-     */
     shouldReplan() {
         if (!this.intention) return null;
 
@@ -111,9 +97,14 @@ export class BDIAgent {
         if (this.intention.type === "pickParcel" && this.intention.target) {
             const targetId = this.intention.target.id;
 
-            // If the agent is already on the target cell, never replan — just pick up
-            const myPos = { x: Math.round(this.beliefs.me.x), y: Math.round(this.beliefs.me.y) };
-            const targetPos = { x: Math.round(this.intention.target.x), y: Math.round(this.intention.target.y) };
+            const myPos = {
+                x: Math.round(this.beliefs.me.x),
+                y: Math.round(this.beliefs.me.y)
+            };
+            const targetPos = {
+                x: Math.round(this.intention.target.x),
+                y: Math.round(this.intention.target.y)
+            };
             if (myPos.x === targetPos.x && myPos.y === targetPos.y) {
                 return null;
             }
@@ -124,7 +115,6 @@ export class BDIAgent {
                 return "target_stolen";
             }
 
-            // Update snapshot so Trigger 3 and 4 use current decayed reward
             this.intention.target = currentParcel;
 
             const U = this.computeParcelUtility(currentParcel);
@@ -133,9 +123,9 @@ export class BDIAgent {
             }
         }
 
-        // Trigger 4: Better opportunity — new parcel with significantly higher U
+        // Trigger 4: Better opportunity
         if (this.intention.type === "pickParcel" && this.intention.utility !== undefined) {
-            const TOLERANCE = 2; // Threshold to avoid oscillation
+            const TOLERANCE = 6; // più alto per ridurre oscillazioni
             const currentU = this.computeParcelUtility(this.intention.target);
             const parcels = this.beliefs.parcels || [];
 
@@ -152,63 +142,60 @@ export class BDIAgent {
         return null;
     }
 
-    // ---------- PLANNER ----------
+    // ---------- PLANNER (con caching) ----------
 
     async planFor(intention) {
+        if (intention.type === "pickParcel") {
+            const goal = intention.target;
+            if (!goal) return [];
+
+            const start = {
+                x: Math.round(this.beliefs.me.x),
+                y: Math.round(this.beliefs.me.y)
+            };
+            const goalRounded = {
+                x: Math.round(goal.x),
+                y: Math.round(goal.y)
+            };
+            const goalKey = `${goalRounded.x},${goalRounded.y}`;
+
+            // Cache hit
+            if (this.lastGoalKey === goalKey && this.cachedPath) {
+                const actions = this.pathToActions(this.cachedPath);
+                actions.push({ action: "pickup" });
+                return actions;
+            }
+
+            // Cache miss → calcolo A*
+            const path = aStar(start, goalRounded, this.beliefs);
+            if (!path) {
+                console.log("A* path (pickParcel): no path found");
+                this.lastGoalKey = null;
+                this.cachedPath = null;
+                return [];
+            }
+
+            this.lastGoalKey = goalKey;
+            this.cachedPath = path;
+
+            const actions = this.pathToActions(path);
+            actions.push({ action: "pickup" });
+            return actions;
+        }
+
+        if (intention.type === "deliverParcel") {
+            this.lastGoalKey = null;
+            this.cachedPath = null;
+        }
+
         if (intentions[intention.type]) {
             return await intentions[intention.type](this, intention);
         }
         return [];
     }
 
-    /**
-     * Plans a wander action towards a random walkable neighbor.
-     * Falls back to a random direction if no walkable neighbor is found.
-     */
-    _planWander() {
-        const x = Math.round(this.beliefs.me.x);
-        const y = Math.round(this.beliefs.me.y);
+    // ---------- RETRY UTILITY ----------
 
-        // Check the current tile type — if arrow, must go that direction
-        const tileType = this.beliefs.getTileType(x, y);
-        const arrowDirs = { '↑': 'up', '↓': 'down', '→': 'right', '←': 'left' };
-        if (tileType && arrowDirs[tileType]) {
-            return [{ action: "move", dir: arrowDirs[tileType] }];
-        }
-
-        // Otherwise, pick a random direction that leads to a walkable tile
-        const dirMap = [
-            { dir: "up", dx: 0, dy: 1 },
-            { dir: "down", dx: 0, dy: -1 },
-            { dir: "left", dx: -1, dy: 0 },
-            { dir: "right", dx: 1, dy: 0 },
-        ];
-
-        const walkable = dirMap.filter(({ dx, dy }) => {
-            const nk = `${x + dx},${y + dy}`;
-            const isWalkable = this.beliefs.walkableTiles.has(nk);
-            // Check dynamic obstacles
-            const hasAgent = Array.from(this.beliefs.agentsMap.values()).some(
-                a => Math.round(a.x) === (x + dx) && Math.round(a.y) === (y + dy)
-            );
-            return isWalkable && !hasAgent;
-        });
-
-        if (walkable.length === 0) {
-            // Surrounded — try random as last resort
-            const dir = dirMap[Math.floor(Math.random() * dirMap.length)].dir;
-            return [{ action: "move", dir }];
-        }
-
-        const choice = walkable[Math.floor(Math.random() * walkable.length)];
-        return [{ action: "move", dir: choice.dir }];
-    }
-
-    // ---------- PLAN EXECUTION ----------
-
-    /**
-     * Safely calls an async SDK method with retry logic for timeouts.
-     */
     async _retryableCall(fn, label, maxAttempts = 3) {
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
@@ -216,12 +203,14 @@ export class BDIAgent {
             } catch (e) {
                 console.log(`${label} attempt ${attempt}/${maxAttempts} timed out`);
                 if (attempt < maxAttempts) {
-                    await new Promise(res => setTimeout(res, 300));
+                    await new Promise(res => setTimeout(res, 200));
                 }
             }
         }
-        return undefined; // all attempts failed
+        return undefined;
     }
+
+    // ---------- PLAN EXECUTION ----------
 
     async executePlanStep() {
         if (!this.plan || this.plan.length === 0) return false;
@@ -236,8 +225,7 @@ export class BDIAgent {
             try {
                 const ok = await this.socket.emitMove(dir);
                 if (ok === false) {
-                    // Trigger 1 (REQUIREMENTS §5): retry once after delay
-                    await new Promise(res => setTimeout(res, 200));
+                    await new Promise(res => setTimeout(res, 60));
                     const retryOk = await this.socket.emitMove(dir);
                     if (retryOk === false) {
                         console.log(`Move ${dir} failed after retry`);
@@ -245,17 +233,15 @@ export class BDIAgent {
                     }
                 }
             } catch (e) {
-                // Timeout — wait briefly and check if position actually changed
-                await new Promise(res => setTimeout(res, 100));
+                await new Promise(res => setTimeout(res, 80));
                 const newX = Math.round(this.beliefs.me.x);
                 const newY = Math.round(this.beliefs.me.y);
                 if (newX === oldX && newY === oldY) {
-                    // Position unchanged — retry once
                     try {
                         const retryOk = await this.socket.emitMove(dir);
                         if (retryOk === false) return false;
                     } catch (e2) {
-                        await new Promise(res => setTimeout(res, 100));
+                        await new Promise(res => setTimeout(res, 80));
                         const finalX = Math.round(this.beliefs.me.x);
                         const finalY = Math.round(this.beliefs.me.y);
                         if (finalX === oldX && finalY === oldY) {
@@ -264,63 +250,41 @@ export class BDIAgent {
                         }
                     }
                 }
-                // Position changed — move succeeded despite timeout
             }
             return true;
         }
 
-        /*if (step.action === "pickup") {
-            await this._waitForPositionStable();
-            const result = await this._retryableCall(
-                () => this.socket.emitPickup(), "Pickup"
-            );
-            if (Array.isArray(result) && result.length > 0) {
-                this.beliefs.addCarriedParcels(result);
-                console.log(`Picked up ${result.length} parcels`);
-            } else {
-                console.log("Pickup returned nothing (parcel may have been taken)");
-            }
-            this.intention = null;
-            return true;
-        }*/
-
         if (step.action === "pickup") {
             await this._waitForPositionStable();
 
-            // 🔍 Critical check of the pack
             const px = Math.round(this.beliefs.me.x);
             const py = Math.round(this.beliefs.me.y);
-
             const parcelHere = this.beliefs.parcels.find(
                 p => Math.round(p.x) === px && Math.round(p.y) === py
             );
 
             if (!parcelHere) {
                 console.log("Parcel disappeared before pickup");
-                this.intention = null;   // forza replanning
+                this.intention = null;
                 return false;
             }
 
-            // Se il pacco c’è ancora → pickup
             const result = await this._retryableCall(
                 () => this.socket.emitPickup(), "Pickup"
             );
-
             if (Array.isArray(result) && result.length > 0) {
                 this.beliefs.addCarriedParcels(result);
                 console.log(`Picked up ${result.length} parcels`);
             } else {
                 console.log("Pickup returned nothing (parcel may have been taken)");
             }
-
             this.intention = null;
             return true;
         }
 
-
         if (step.action === "putdown") {
             await this._waitForPositionStable();
-            // CRITICAL: verify we are on a delivery tile before putdown
+
             const px = Math.round(this.beliefs.me.x);
             const py = Math.round(this.beliefs.me.y);
             if (!this.beliefs.deliveryTiles.has(`${px},${py}`)) {
@@ -328,6 +292,7 @@ export class BDIAgent {
                 this.intention = null;
                 return false;
             }
+
             const result = await this._retryableCall(
                 () => this.socket.emitPutdown(), "Putdown"
             );
@@ -346,23 +311,25 @@ export class BDIAgent {
 
     // ---------- BDI CYCLE ----------
 
-    /**
-     * Executes the full BDI cycle: deliberate → plan → execute ALL steps.
-     * Runs the entire plan in one call for speed, checking replan triggers between moves.
-     */
     async step() {
         if (this._stepping) return;
         this._stepping = true;
 
+        const MAX_REPLANS = 5;
+        let replanCount = 0;
+
         try {
-            // Outer loop: after pickup/putdown, immediately re-deliberate & execute
             while (true) {
-                // 1. Deliberate if no current intention/plan
                 if (!this.intention || !this.plan || this.plan.length === 0) {
                     this.intention = this.deliberate();
-                    console.log("Intention:", this.intention.type,
-                        this.intention.target ? `(${this.intention.target.x},${this.intention.target.y})` : '',
-                        'U=' + (this.intention.utility ?? ''));
+                    console.log(
+                        "Intention:",
+                        this.intention.type,
+                        this.intention.target
+                            ? `(${Math.round(this.intention.target.x)},${Math.round(this.intention.target.y)})`
+                            : "",
+                        "U=" + (this.intention.utility ?? "")
+                    );
 
                     this.plan = await this.planFor(this.intention);
                     if (!this.plan || this.plan.length === 0) {
@@ -371,14 +338,22 @@ export class BDIAgent {
                     }
                 }
 
-                // 2. Execute the FULL plan
                 while (this.plan && this.plan.length > 0) {
                     const nextStep = this.plan[0];
 
                     if (nextStep.action === "move") {
                         const replanReason = this.shouldReplan();
                         if (replanReason) {
-                            console.log(`Replanning: ${replanReason}`);
+                            replanCount++;
+                            console.log(`Replanning: ${replanReason} (count=${replanCount})`);
+
+                            if (replanCount > MAX_REPLANS) {
+                                console.log("Too many replans, switching to wander");
+                                this.intention = { type: "wander", utility: 0 };
+                                this.plan = await this.planFor(this.intention);
+                                break;
+                            }
+
                             this.intention = null;
                             this.plan = [];
                             break;
@@ -395,20 +370,15 @@ export class BDIAgent {
                     if (!this.intention) break;
                 }
 
-                // Wander: execute once and stop
                 if (this.intention?.type === "wander") {
                     this.intention = null;
                     break;
                 }
 
-                // If intention still set (replan needed), loop back
-                // If intention cleared by pickup/putdown, loop back to re-deliberate
-                if (this.intention) break; // plan finished normally or was interrupted
-                // else: intention was cleared → re-deliberate immediately
+                if (this.intention) break;
             }
         } catch (e) {
             console.error("Error in step():", e);
-            // Clear intention on error so the BDI cycle restarts
             this.intention = null;
             this.plan = [];
         } finally {
@@ -416,16 +386,13 @@ export class BDIAgent {
         }
     }
 
-    /**
-     * Waits until the agent's fractional position stabilizes to an integer grid coordinate.
-     */
     async _waitForPositionStable() {
         let attempts = 0;
-        while (attempts < 10) {
+        while (attempts < 5) {
             const dx = Math.abs(this.beliefs.me.x - Math.round(this.beliefs.me.x));
             const dy = Math.abs(this.beliefs.me.y - Math.round(this.beliefs.me.y));
             if (dx < 0.05 && dy < 0.05) break;
-            await new Promise(res => setTimeout(res, 50));
+            await new Promise(res => setTimeout(res, 15));
             attempts++;
         }
     }
