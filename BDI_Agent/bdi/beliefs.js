@@ -17,7 +17,7 @@ function clockEventToMs(clockEvent) {
         '5s': 5000,
         '10s': 10000,
     };
-    if (clockEvent === 'infinite') 
+    if (clockEvent === 'infinite')
         return null;
     return mapping[clockEvent] ?? 1000; // default 1s
 }
@@ -107,7 +107,7 @@ export class Beliefs {
         this.walkableTiles.clear();
         this.tileTypeMap.clear();
 
-        const nonWalkable = new Set(['0', '5!']);
+        const nonWalkable = new Set(['0']); // 5 and 5! are walkable
 
         for (const tile of tiles) {
             const key = `${tile.x},${tile.y}`;
@@ -141,6 +141,8 @@ export class Beliefs {
 
         // Add or update currently visible parcels
         for (const p of visibleParcels) {
+            // Ignore parcels carried by other agents
+            if (p.carriedBy && p.carriedBy !== this.me.id) continue;
 
             this.parcelsMap.set(p.id, {
                 ...p,
@@ -164,11 +166,7 @@ export class Beliefs {
             }
 
             // Forget if the parcel is expected at (x,y) which is in my field of view but I don't see it
-            // BUT: never forget parcels at the agent's current cell (we may be about to pick them up)
             const cellKey = `${p.x},${p.y}`;
-            const myCell = `${Math.round(this.me.x)},${Math.round(this.me.y)}`;
-            if (cellKey === myCell) continue;
-
             if (visibleCells === null || visibleCells.has(cellKey)) {
                 if (!visibleParcelIds.has(id)) {
                     this.parcelsMap.delete(id);
