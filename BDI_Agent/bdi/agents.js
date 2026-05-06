@@ -350,10 +350,11 @@ export class BDIAgent {
                     if (!this.intention) break;
                 }
 
-                // Wander: execute once and stop
+                // Wander: clear intention and re-deliberate immediately
+                // (if a parcel appeared during the move, we'll switch to it)
                 if (this.intention?.type === "wander") {
                     this.intention = null;
-                    break;
+                    continue;
                 }
 
                 // If intention still set (replan needed), loop back
