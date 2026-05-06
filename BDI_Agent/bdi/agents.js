@@ -11,7 +11,7 @@ export class BDIAgent {
         this.plan = [];          // [{ action: "move", dir }, ...]
         this._stepping = false;  // Mutex to prevent concurrent step() calls
 
-        // Cache per i path (per ridurre chiamate A*)
+        // Path cache (to reduce A* call)
         this.lastGoalKey = null;
         this.cachedPath = null;
     }
@@ -27,6 +27,7 @@ export class BDIAgent {
      * Computes the utility of picking a parcel.
      * U = R_current - (Cost_travel + Cost_delivery)
      */
+    
     computeParcelUtility(parcel) {
         const me = this.beliefs.me;
         const parcelPos = { x: Math.round(parcel.x), y: Math.round(parcel.y) };
