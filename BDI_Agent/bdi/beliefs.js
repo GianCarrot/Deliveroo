@@ -17,7 +17,7 @@ function clockEventToMs(clockEvent) {
         '5s': 5000,
         '10s': 10000,
     };
-    if (clockEvent === 'infinite') 
+    if (clockEvent === 'infinite')
         return null;
     return mapping[clockEvent] ?? 1000; // default 1s
 }
@@ -40,7 +40,7 @@ export class Beliefs {
         this.tiles = [];
         /** @type {Set<string>} Keys "x,y" of delivery tiles (type '2') */
         this.deliveryTiles = new Set();
-        /** @type {Set<string>} Keys "x,y" of walkable tiles (type != '0' and != '5!') */
+        /** @type {Set<string>} Keys "x,y" of walkable tiles (type != '0') */
         this.walkableTiles = new Set();
         /** @type {Map<string, string>} Keys "x,y" -> tile type for arrow/directional checks */
         this.tileTypeMap = new Map();
@@ -99,7 +99,7 @@ export class Beliefs {
      * @param {number} height
      * @param {IOTile[]} tiles
      */
-    
+
     /*updateMap(width, height, tiles) {
         this.mapWidth = width;
         this.mapHeight = height;
@@ -137,7 +137,7 @@ export class Beliefs {
         this.walkableTiles.clear();
         this.tileTypeMap.clear();
 
-        const nonWalkable = new Set(['0', '5!']);
+        const nonWalkable = new Set(['0']);
 
         for (const tile of tiles) {
             const key = `${tile.x},${tile.y}`;

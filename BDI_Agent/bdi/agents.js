@@ -20,14 +20,14 @@ export class BDIAgent {
 
     manhattan(a, b) {
         return Math.abs(Math.round(a.x) - Math.round(b.x)) +
-               Math.abs(Math.round(a.y) - Math.round(b.y));
+            Math.abs(Math.round(a.y) - Math.round(b.y));
     }
 
     /**
      * Computes the utility of picking a parcel.
      * U = R_current - (Cost_travel + Cost_delivery)
      */
-    
+
     computeParcelUtility(parcel) {
         const me = this.beliefs.me;
         const parcelPos = { x: Math.round(parcel.x), y: Math.round(parcel.y) };
@@ -371,9 +371,11 @@ export class BDIAgent {
                     if (!this.intention) break;
                 }
 
+                // Wander: clear intention and re-deliberate immediately
+                // (if a parcel appeared during the move, we'll switch to it)
                 if (this.intention?.type === "wander") {
                     this.intention = null;
-                    break;
+                    continue;
                 }
 
                 if (this.intention) break;
