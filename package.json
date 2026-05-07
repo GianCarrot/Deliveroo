@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@unitn-asa/pddl-client": "^1.7.7"
+  }
+}
