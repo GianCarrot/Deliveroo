@@ -6,7 +6,7 @@ This project implements an autonomous agent for the Deliveroo.js environment. Th
 ## Architectural Choices
 - **BDI Architecture**: The agent strictly separates its internal state representation (**Beliefs**) from its goal evaluation (**Desires/Deliberation**) and its actionable sequences (**Intentions/Plans**).
 - **Utility-Based Deliberation**: Instead of just picking the closest parcel, the agent evaluates all known parcels using a utility function: `U = Reward - (TravelCost + DeliveryCost)`. This ensures the agent prioritizes the most profitable actions.
-- **Dynamic Pathfinding**: A custom implementation of the A* algorithm is used. It is aware of dynamic obstacles (automatically routing around other agents) and strictly respects map directional constraints (arrow tiles).
+- **Dynamic Pathfinding & Safety**: A custom implementation of the A* algorithm is used. It strictly respects map directional constraints (arrow tiles) and works alongside pre-move safety checks to avoid dynamic obstacles (other agents) and prevent penalties.
 - **Robustness and Latency Compensation**: The agent interacts with a remote server via WebSockets. To handle network unreliability, all critical SDK actions (`emitMove`, `emitPickup`, `emitPutdown`) are wrapped in custom retry logic (`_retryableCall`). The execution loop operates aggressively, allowing the agent to perform multi-step operations (like moving and picking up) seamlessly without dropping the cycle.
 
 ## Directory Structure
@@ -32,9 +32,9 @@ The system is driven by `sensing` events received from the server (handled in `i
 
 ### 2. Deliberation (Desires & Intentions)
 When the agent does not have an active plan, the `deliberate()` method is invoked to form a new intention:
-1. **Deliver**: If the agent is currently carrying parcels, the highest priority is to find the nearest delivery zone (tile type `2`) and form a `deliverParcel` intention.
+1. **Deliver / Multi-Pickup**: If the agent is currently carrying parcels, its primary goal is finding the nearest delivery zone (tile type `2`). However, it continuously evaluates whether a slight detour to pick up additional nearby high-reward parcels yields a positive net utility (`Reward - DetourCost > 0`). If so, it performs a multi-pickup sequence before delivering.
 2. **Pick**: If empty-handed, the agent evaluates all parcels in its memory using `computeParcelUtility()`. The parcel with the highest positive utility becomes the target of a `pickParcel` intention.
-3. **Wander**: If no profitable parcels are known, the agent defaults to a `wander` intention, generating a random walkable path to explore the map and discover new parcels.
+3. **Patrol Spawn Zones**: If no profitable parcels are known, the agent defaults to a `goToSpawn` intention. Instead of random wandering, it continuously patrols between reachable spawn tiles (tile type `1`) to maximize the chances of discovering newly spawned parcels.
 
 ### 3. Planning
 Once an intention is formed, the `planFor()` method generates a sequence of actions:
