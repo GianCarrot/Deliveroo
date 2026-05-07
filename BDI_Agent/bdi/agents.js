@@ -82,7 +82,7 @@ export class BDIAgent {
 
     deliberate() {
         const candidates = getDesires(this);
-        if (candidates.length === 0) return { type: "wander", utility: 0 };
+        if (candidates.length === 0) return { type: "goToSpawn", utility: 0 };
         candidates.sort((a, b) => b.utility - a.utility);
         return candidates[0];
     }
@@ -116,9 +116,25 @@ export class BDIAgent {
             // Update snapshot so Trigger 3 and 4 use current decayed reward
             this.intention.target = currentParcel;
 
-            const U = this.computeParcelUtility(currentParcel);
-            if (U <= 0) {
-                return "utility_decayed";
+            // Use batch-aware utility when carrying parcels (consistent with desires.js)
+            const isCarrying = this.beliefs.carriedCount > 0 || this.beliefs.me.carrying > 0;
+            if (isCarrying) {
+                const parcelPos = { x: Math.round(currentParcel.x), y: Math.round(currentParcel.y) };
+                const travelCost = this.manhattan(myPos, parcelPos);
+                const deliveryFromParcel = this._nearestDeliveryFrom(parcelPos);
+                const deliveryCostFromParcel = deliveryFromParcel ? this.manhattan(parcelPos, deliveryFromParcel) : Infinity;
+                const deliveryFromMe = this.getNearestDeliveryTile();
+                const myDeliveryCost = deliveryFromMe ? this.manhattan(myPos, deliveryFromMe) : Infinity;
+                const detourCost = travelCost + deliveryCostFromParcel - myDeliveryCost;
+                const netGain = currentParcel.reward - Math.max(0, detourCost);
+                if (netGain <= 0) {
+                    return "utility_decayed";
+                }
+            } else {
+                const U = this.computeParcelUtility(currentParcel);
+                if (U <= 0) {
+                    return "utility_decayed";
+                }
             }
         }
 
@@ -151,46 +167,75 @@ export class BDIAgent {
     }
 
     /**
-     * Plans a wander action towards a random walkable neighbor.
-     * Falls back to a random direction if no walkable neighbor is found.
+     * Plans a path to a spawn tile (type 1) using A*.
+     * Continuously patrols between spawn tiles to discover parcels.
+     * Falls back to a safe random direction if no spawn tile is reachable.
      */
-    _planWander() {
+    _planGoToSpawn() {
         const x = Math.round(this.beliefs.me.x);
         const y = Math.round(this.beliefs.me.y);
 
-        // Check the current tile type — if arrow, must go that direction
+        // If on an arrow tile, must follow its direction
         const tileType = this.beliefs.getTileType(x, y);
         const arrowDirs = { '↑': 'up', '↓': 'down', '→': 'right', '←': 'left' };
         if (tileType && arrowDirs[tileType]) {
             return [{ action: "move", dir: arrowDirs[tileType] }];
         }
 
-        // Otherwise, pick a random direction that leads to a walkable tile
+        // Collect reachable spawn tiles (min distance 5 to avoid oscillation)
+        const MIN_SPAWN_DIST = 5;
+        const myPos = { x, y };
+        const candidates = [];
+
+        for (const key of this.beliefs.spawnTiles) {
+            const [sx, sy] = key.split(",").map(Number);
+            const manhattan = Math.abs(sx - x) + Math.abs(sy - y);
+            if (manhattan < MIN_SPAWN_DIST) continue;
+            const path = aStar(myPos, { x: sx, y: sy }, this.beliefs);
+            if (path && path.length > 1) {
+                candidates.push({ path, dist: path.length });
+            }
+        }
+
+        if (candidates.length > 0) {
+            // Pick randomly among the closest candidates (top 3)
+            candidates.sort((a, b) => a.dist - b.dist);
+            const topN = candidates.slice(0, Math.min(3, candidates.length));
+            const chosen = topN[Math.floor(Math.random() * topN.length)];
+            return this.pathToActions(chosen.path);
+        }
+
+        // Fallback: safe random direction (avoid walls, bad arrows, and agents)
+        const opposite = { up: 'down', down: 'up', left: 'right', right: 'left' };
         const dirMap = [
             { dir: "up", dx: 0, dy: 1 },
             { dir: "down", dx: 0, dy: -1 },
             { dir: "left", dx: -1, dy: 0 },
             { dir: "right", dx: 1, dy: 0 },
         ];
-
-        const walkable = dirMap.filter(({ dx, dy }) => {
-            const nk = `${x + dx},${y + dy}`;
-            const isWalkable = this.beliefs.walkableTiles.has(nk);
-            // Check dynamic obstacles
-            const hasAgent = Array.from(this.beliefs.agentsMap.values()).some(
-                a => Math.round(a.x) === (x + dx) && Math.round(a.y) === (y + dy)
-            );
-            return isWalkable && !hasAgent;
+        const safeDirs = dirMap.filter(({ dir, dx, dy }) => {
+            const nx = x + dx;
+            const ny = y + dy;
+            const nk = `${nx},${ny}`;
+            if (!this.beliefs.walkableTiles.has(nk)) return false;
+            const destType = this.beliefs.getTileType(nx, ny);
+            if (destType && arrowDirs[destType]) {
+                if (arrowDirs[destType] === opposite[dir]) return false;
+            }
+            for (const agent of this.beliefs.agentsMap.values()) {
+                if (Math.round(agent.x) === nx && Math.round(agent.y) === ny) return false;
+            }
+            return true;
         });
 
-        if (walkable.length === 0) {
-            // Surrounded — try random as last resort
-            const dir = dirMap[Math.floor(Math.random() * dirMap.length)].dir;
-            return [{ action: "move", dir }];
+        if (safeDirs.length > 0) {
+            const choice = safeDirs[Math.floor(Math.random() * safeDirs.length)];
+            return [{ action: "move", dir: choice.dir }];
         }
 
-        const choice = walkable[Math.floor(Math.random() * walkable.length)];
-        return [{ action: "move", dir: choice.dir }];
+        // Absolute fallback
+        const fallback = dirMap[Math.floor(Math.random() * dirMap.length)];
+        return [{ action: "move", dir: fallback.dir }];
     }
 
     // ---------- PLAN EXECUTION ----------
@@ -221,6 +266,36 @@ export class BDIAgent {
             const dir = step.dir;
             const oldX = Math.round(this.beliefs.me.x);
             const oldY = Math.round(this.beliefs.me.y);
+
+            // Pre-move safety check: abort if destination is unsafe
+            const dirDelta = { up: [0,1], down: [0,-1], left: [-1,0], right: [1,0] };
+            const [dx, dy] = dirDelta[dir];
+            const destX = oldX + dx;
+            const destY = oldY + dy;
+            const destKey = `${destX},${destY}`;
+
+            // Check wall
+            if (!this.beliefs.walkableTiles.has(destKey)) {
+                console.log(`Move ${dir} blocked by wall at (${destX},${destY})`);
+                return false;
+            }
+
+            // Check arrow tile pointing opposite
+            const arrowDirs = { '↑': 'up', '↓': 'down', '→': 'right', '←': 'left' };
+            const opposite = { up: 'down', down: 'up', left: 'right', right: 'left' };
+            const destType = this.beliefs.getTileType(destX, destY);
+            if (destType && arrowDirs[destType] && arrowDirs[destType] === opposite[dir]) {
+                console.log(`Move ${dir} blocked by opposing arrow at (${destX},${destY})`);
+                return false;
+            }
+
+            // Check agent-occupied tile
+            for (const agent of this.beliefs.agentsMap.values()) {
+                if (Math.round(agent.x) === destX && Math.round(agent.y) === destY) {
+                    console.log(`Move ${dir} blocked by agent at (${destX},${destY})`);
+                    return false;
+                }
+            }
 
             try {
                 const ok = await this.socket.emitMove(dir);
@@ -268,6 +343,10 @@ export class BDIAgent {
                 console.log(`Picked up ${result.length} parcels`);
             } else {
                 console.log("Pickup returned nothing (parcel may have been taken)");
+                // Remove phantom parcel from beliefs to prevent retry loop
+                if (this.intention?.target?.id) {
+                    this.beliefs.parcelsMap.delete(this.intention.target.id);
+                }
             }
             this.intention = null;
             return true;
@@ -350,9 +429,9 @@ export class BDIAgent {
                     if (!this.intention) break;
                 }
 
-                // Wander: clear intention and re-deliberate immediately
+                // goToSpawn: clear intention and re-deliberate immediately
                 // (if a parcel appeared during the move, we'll switch to it)
-                if (this.intention?.type === "wander") {
+                if (this.intention?.type === "goToSpawn") {
                     this.intention = null;
                     continue;
                 }

@@ -40,7 +40,9 @@ export class Beliefs {
         this.tiles = [];
         /** @type {Set<string>} Keys "x,y" of delivery tiles (type '2') */
         this.deliveryTiles = new Set();
-        /** @type {Set<string>} Keys "x,y" of walkable tiles (type != '0' and != '5!') */
+        /** @type {Set<string>} Keys "x,y" of spawn tiles (type '1') */
+        this.spawnTiles = new Set();
+        /** @type {Set<string>} Keys "x,y" of walkable tiles (type != '0') */
         this.walkableTiles = new Set();
         /** @type {Map<string, string>} Keys "x,y" -> tile type for arrow/directional checks */
         this.tileTypeMap = new Map();
@@ -104,6 +106,7 @@ export class Beliefs {
         this.mapHeight = height;
         this.tiles = tiles;
         this.deliveryTiles.clear();
+        this.spawnTiles.clear();
         this.walkableTiles.clear();
         this.tileTypeMap.clear();
 
@@ -118,10 +121,13 @@ export class Beliefs {
             if (String(tile.type) === '2') {
                 this.deliveryTiles.add(key);
             }
+            if (String(tile.type) === '1') {
+                this.spawnTiles.add(key);
+            }
         }
 
         console.log(`Map received: ${width}x${height}, ${tiles.length} tiles, ` +
-            `${this.deliveryTiles.size} delivery, ${this.walkableTiles.size} walkable`);
+            `${this.deliveryTiles.size} delivery, ${this.spawnTiles.size} spawn, ${this.walkableTiles.size} walkable`);
     }
 
     // ─────────────────────────────────────────────
@@ -254,6 +260,11 @@ export class Beliefs {
         for (const p of pickedUp) {
             if (p.id && !this.carriedParcels.includes(p.id)) {
                 this.carriedParcels.push(p.id);
+            }
+            // Mark parcel as carried in belief map to prevent re-pickup attempts
+            if (p.id && this.parcelsMap.has(p.id)) {
+                const entry = this.parcelsMap.get(p.id);
+                entry.carriedBy = this.me.id;
             }
         }
     }
