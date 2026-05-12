@@ -1,5 +1,64 @@
 import { aStar } from "./pathfinding.js";
 
+/**
+ * Arrow tile symbols mapped to the direction they force.
+ */
+const ARROW_DIRS = { '↑': 'up', '↓': 'down', '→': 'right', '←': 'left' };
+
+/**
+ * Direction deltas: direction name → (dx, dy).
+ */
+const DIR_DELTA = {
+    up: { dx: 0, dy: 1 },
+    down: { dx: 0, dy: -1 },
+    left: { dx: -1, dy: 0 },
+    right: { dx: 1, dy: 0 },
+};
+
+/**
+ * Checks if moving in `dir` from (x, y) is safe.
+ * A move is UNSAFE if:
+ *   - The destination is a wall (not walkable)
+ *   - The destination is an arrow tile whose forced direction would
+ *     send the agent backward (opposite to the direction we arrived from)
+ *   - The destination is occupied by another agent
+ *
+ * @param {number} x  Current integer x
+ * @param {number} y  Current integer y
+ * @param {string} dir  Direction to move
+ * @param {import('./beliefs.js').Beliefs} beliefs
+ * @returns {boolean} true if safe
+ */
+function isMoveSafe(x, y, dir, beliefs) {
+    const { dx, dy } = DIR_DELTA[dir];
+    const nx = x + dx;
+    const ny = y + dy;
+    const nk = `${nx},${ny}`;
+
+    // Wall check: destination must be walkable
+    if (!beliefs.walkableTiles.has(nk)) return false;
+
+    // Arrow-tile check: if destination is an arrow tile,
+    // the forced direction must NOT be the opposite of our movement direction
+    const destType = beliefs.getTileType(nx, ny);
+    if (destType && ARROW_DIRS[destType]) {
+        const forcedDir = ARROW_DIRS[destType];
+        const opposite = { up: 'down', down: 'up', left: 'right', right: 'left' };
+        if (forcedDir === opposite[dir]) {
+            return false; // stepping onto this arrow would bounce us back
+        }
+    }
+
+    // Agent check: destination must not be occupied by another agent
+    for (const agent of beliefs.agentsMap.values()) {
+        if (Math.round(agent.x) === nx && Math.round(agent.y) === ny) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 export const intentions = {
     pickParcel: async (agent, intention) => {
         const goal = intention.target;
@@ -36,43 +95,58 @@ export const intentions = {
         return actions;
     },
 
-    wander: async (agent, intention) => {
+    /**
+     * goToSpawn: navigate to a spawn tile (type 1) using A*.
+     * Continuously patrols between spawn tiles to discover parcels.
+     * If on an arrow tile, obey the forced direction first.
+     */
+    goToSpawn: async (agent, intention) => {
         const x = Math.round(agent.beliefs.me.x);
         const y = Math.round(agent.beliefs.me.y);
 
-        // Check the current tile type — if arrow, must go that direction
-        const tileType = agent.beliefs.getTileType(x, y);
-        const arrowDirs = { '↑': 'up', '↓': 'down', '→': 'right', '←': 'left' };
-        if (tileType && arrowDirs[tileType]) {
-            return [{ action: "move", dir: arrowDirs[tileType] }];
+        // If currently on an arrow tile, must follow its direction
+        const currentType = agent.beliefs.getTileType(x, y);
+        if (currentType && ARROW_DIRS[currentType]) {
+            return [{ action: "move", dir: ARROW_DIRS[currentType] }];
         }
 
-        // Otherwise, pick a random direction that leads to a walkable tile
-        const dirMap = [
-            { dir: "up", dx: 0, dy: 1 },
-            { dir: "down", dx: 0, dy: -1 },
-            { dir: "left", dx: -1, dy: 0 },
-            { dir: "right", dx: 1, dy: 0 },
-        ];
+        // Collect reachable spawn tiles (min distance 5 to avoid oscillation)
+        const MIN_SPAWN_DIST = 5;
+        const myPos = { x, y };
+        const candidates = [];
 
-        const walkable = dirMap.filter(({ dx, dy }) => {
-            const nk = `${x + dx},${y + dy}`;
-            const isWalkable = agent.beliefs.walkableTiles.has(nk);
-            // Check dynamic obstacles
-            const hasAgent = Array.from(agent.beliefs.agentsMap.values()).some(
-                a => Math.round(a.x) === (x + dx) && Math.round(a.y) === (y + dy)
-            );
-            return isWalkable && !hasAgent;
-        });
+        for (const key of agent.beliefs.spawnTiles) {
+            const [sx, sy] = key.split(",").map(Number);
+            const manhattan = Math.abs(sx - x) + Math.abs(sy - y);
+            if (manhattan < MIN_SPAWN_DIST) continue;
 
-        if (walkable.length === 0) {
-            // fallback to any valid dir to avoid freezing
-            const dirs = ["up", "down", "left", "right"];
-            const dir = dirs[Math.floor(Math.random() * dirs.length)];
-            return [{ action: "move", dir }];
+            const path = aStar(myPos, { x: sx, y: sy }, agent.beliefs);
+            if (path && path.length > 1) {
+                candidates.push({ path, dist: path.length });
+            }
         }
 
-        const choice = walkable[Math.floor(Math.random() * walkable.length)];
-        return [{ action: "move", dir: choice.dir }];
+        if (candidates.length > 0) {
+            // Pick randomly among the closest candidates (top 3) to avoid deterministic oscillation
+            candidates.sort((a, b) => a.dist - b.dist);
+            const topN = candidates.slice(0, Math.min(3, candidates.length));
+            const chosen = topN[Math.floor(Math.random() * topN.length)];
+            const target = chosen.path[chosen.path.length - 1];
+            console.log(`goToSpawn: patrolling to spawn at (${target.x},${target.y}), ${chosen.dist} steps`);
+            return agent.pathToActions(chosen.path);
+        }
+
+        // Fallback: no reachable spawn tile — pick a safe random direction
+        const dirs = ["up", "down", "left", "right"];
+        const safeDirs = dirs.filter(d => isMoveSafe(x, y, d, agent.beliefs));
+
+        if (safeDirs.length > 0) {
+            const choice = safeDirs[Math.floor(Math.random() * safeDirs.length)];
+            return [{ action: "move", dir: choice }];
+        }
+
+        // Absolute fallback: pick any direction (should rarely happen)
+        const fallback = dirs[Math.floor(Math.random() * dirs.length)];
+        return [{ action: "move", dir: fallback }];
     }
 };
