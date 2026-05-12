@@ -54,16 +54,6 @@ export function aStar(start, goal, beliefs) {
      * - Arrow tile directional constraints (from the CURRENT cell)
      * - Dynamic obstacles (other agents)
      */
-
-    function canEnter(x, y, fromX, fromY) {
-        const tileType = beliefs.getTileType(x, y);
-        if (!ARROW_DIRECTION[tileType]) return true;
-
-        const [dx, dy] = ARROW_DIRECTION[tileType];
-        // si può entrare solo se si arriva dalla direzione opposta
-        return (x - fromX === dx * -1) && (y - fromY === dy * -1);
-    }
-
     function neighbors(x, y) {
         const tileType = beliefs.getTileType(x, y);
 
@@ -86,13 +76,23 @@ export function aStar(start, goal, beliefs) {
         ];
 
         return dirs
-            .map(([dx, dy]) => [x + dx, y + dy])
-            .filter(([nx, ny]) => {
+            .map(([dx, dy]) => [x + dx, y + dy, dx, dy])
+            .filter(([nx, ny, dx, dy]) => {
                 const nk = key(nx, ny);
-                return beliefs.walkableTiles.has(nk)
-                    && !agentCells.has(nk)
-                    && canEnter(nx, ny, x, y);
-            });
+                if (!beliefs.walkableTiles.has(nk)) return false;
+                if (agentCells.has(nk)) return false;
+
+                // Block entering an arrow tile that points opposite to our direction
+                const destType = beliefs.getTileType(nx, ny);
+                if (destType && ARROW_DIRECTION[destType]) {
+                    const [adx, ady] = ARROW_DIRECTION[destType];
+                    // Arrow points opposite if its direction == -(dx,dy)
+                    if (adx === -dx && ady === -dy) return false;
+                }
+
+                return true;
+            })
+            .map(([nx, ny]) => [nx, ny]);
     }
 
     while (open.size > 0) {

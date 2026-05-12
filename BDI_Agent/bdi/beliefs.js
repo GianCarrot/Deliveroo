@@ -40,6 +40,8 @@ export class Beliefs {
         this.tiles = [];
         /** @type {Set<string>} Keys "x,y" of delivery tiles (type '2') */
         this.deliveryTiles = new Set();
+        /** @type {Set<string>} Keys "x,y" of spawn tiles (type '1') */
+        this.spawnTiles = new Set();
         /** @type {Set<string>} Keys "x,y" of walkable tiles (type != '0') */
         this.walkableTiles = new Set();
         /** @type {Map<string, string>} Keys "x,y" -> tile type for arrow/directional checks */
@@ -99,16 +101,16 @@ export class Beliefs {
      * @param {number} height
      * @param {IOTile[]} tiles
      */
-
-    /*updateMap(width, height, tiles) {
+    updateMap(width, height, tiles) {
         this.mapWidth = width;
         this.mapHeight = height;
         this.tiles = tiles;
         this.deliveryTiles.clear();
+        this.spawnTiles.clear();
         this.walkableTiles.clear();
         this.tileTypeMap.clear();
 
-        const nonWalkable = new Set(['0', '5!']);
+        const nonWalkable = new Set(['0']); // 5 and 5! are walkable
 
         for (const tile of tiles) {
             const key = `${tile.x},${tile.y}`;
@@ -118,42 +120,15 @@ export class Beliefs {
             }
             if (String(tile.type) === '2') {
                 this.deliveryTiles.add(key);
+            }
+            if (String(tile.type) === '1') {
+                this.spawnTiles.add(key);
             }
         }
 
         console.log(`Map received: ${width}x${height}, ${tiles.length} tiles, ` +
-            `${this.deliveryTiles.size} delivery, ${this.walkableTiles.size} walkable`);
-    }*/
-
-    updateMap(width, height, tiles) {
-        const maxX = Math.max(...tiles.map(t => t.x));
-        const maxY = Math.max(...tiles.map(t => t.y));
-
-        this.mapWidth = maxX + 1;
-        this.mapHeight = maxY + 1;
-
-        this.tiles = tiles;
-        this.deliveryTiles.clear();
-        this.walkableTiles.clear();
-        this.tileTypeMap.clear();
-
-        const nonWalkable = new Set(['0']);
-
-        for (const tile of tiles) {
-            const key = `${tile.x},${tile.y}`;
-            this.tileTypeMap.set(key, String(tile.type));
-            if (!nonWalkable.has(String(tile.type))) {
-                this.walkableTiles.add(key);
-            }
-            if (String(tile.type) === '2') {
-                this.deliveryTiles.add(key);
-            }
-        }
-
-        console.log(`Map received: ${this.mapWidth}x${this.mapHeight}, ${tiles.length} tiles, ${this.deliveryTiles.size} delivery`);
+            `${this.deliveryTiles.size} delivery, ${this.spawnTiles.size} spawn, ${this.walkableTiles.size} walkable`);
     }
-
-
 
     // ─────────────────────────────────────────────
     //  PARCELS
@@ -172,6 +147,8 @@ export class Beliefs {
 
         // Add or update currently visible parcels
         for (const p of visibleParcels) {
+            // Ignore parcels carried by other agents
+            if (p.carriedBy && p.carriedBy !== this.me.id) continue;
 
             this.parcelsMap.set(p.id, {
                 ...p,
@@ -195,11 +172,7 @@ export class Beliefs {
             }
 
             // Forget if the parcel is expected at (x,y) which is in my field of view but I don't see it
-            // BUT: never forget parcels at the agent's current cell (we may be about to pick them up)
             const cellKey = `${p.x},${p.y}`;
-            const myCell = `${Math.round(this.me.x)},${Math.round(this.me.y)}`;
-            if (cellKey === myCell) continue;
-
             if (visibleCells === null || visibleCells.has(cellKey)) {
                 if (!visibleParcelIds.has(id)) {
                     this.parcelsMap.delete(id);
@@ -287,6 +260,11 @@ export class Beliefs {
         for (const p of pickedUp) {
             if (p.id && !this.carriedParcels.includes(p.id)) {
                 this.carriedParcels.push(p.id);
+            }
+            // Mark parcel as carried in belief map to prevent re-pickup attempts
+            if (p.id && this.parcelsMap.has(p.id)) {
+                const entry = this.parcelsMap.get(p.id);
+                entry.carriedBy = this.me.id;
             }
         }
     }
