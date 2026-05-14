@@ -1,0 +1,1 @@
+// This file is a shared protocol for the multi-agent system
