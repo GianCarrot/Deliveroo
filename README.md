@@ -33,7 +33,7 @@ The system is driven by `sensing` events received from the server (handled in `i
 ### 2. Deliberation (Desires & Intentions)
 When the agent does not have an active plan, the `deliberate()` method is invoked to form a new intention:
 1. **Deliver / Multi-Pickup**: If the agent is currently carrying parcels, its primary goal is finding the nearest delivery zone (tile type `2`). However, it continuously evaluates whether a slight detour to pick up additional nearby high-reward parcels yields a positive net utility (`Reward - DetourCost > 0`). If so, it performs a multi-pickup sequence before delivering.
-2. **Pick**: If empty-handed, the agent evaluates all parcels in its memory using `computeParcelUtility()`. The parcel with the highest positive utility becomes the target of a `pickParcel` intention.
+2. **Pick**: If empty-handed, the agent evaluates all parcels in its memory using `computeParcelUtility()`. Parcels held by other agents, or sitting on tiles currently occupied by other agents, are strictly ignored. The available parcel with the highest positive utility becomes the target of a `pickParcel` intention.
 3. **Patrol Spawn Zones**: If no profitable parcels are known, the agent defaults to a `goToSpawn` intention. Instead of random wandering, it continuously patrols between reachable spawn tiles (tile type `1`) to maximize the chances of discovering newly spawned parcels.
 
 ### 3. Planning
@@ -48,5 +48,7 @@ The `step()` method is the heart of the agent, executing the generated plan in a
   - The target parcel has been stolen by another agent.
   - The target parcel's utility has decayed below zero.
   - A significantly better opportunity (a new parcel with much higher utility) has been discovered.
-- **Action Execution**: The agent processes `executePlanStep()`. If a movement fails (e.g., due to an obstacle not caught by A*), the agent retries quickly before eventually triggering a full replan.
+- **Action Execution**: The agent processes `executePlanStep()`. 
+  - **Dynamic Obstacle Handling**: If a movement is blocked by another agent, instead of abandoning the plan immediately, the agent waits and retries briefly (up to 3 times), as the blocking agent is likely to move.
+  - **Opportunistic Pickup**: After every successful movement step, the agent checks if it landed on a tile with uncollected parcels and picks them up instantly for "free," without requiring a detour or utility evaluation.
 - **Immediate Re-evaluation**: Upon successfully completing a terminal action (`pickup`/`putdown`), the loop immediately clears the intention and loops back to deliberation. This prevents the agent from sitting idle waiting for the next server sensing event, drastically increasing delivery throughput.
