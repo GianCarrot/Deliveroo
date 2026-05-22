@@ -1,15 +1,18 @@
-# Deliveroo BDI Agent
+# Deliveroo Project
 
 ## Overview
-This project implements an autonomous agent for the Deliveroo.js environment. The agent is built using a BDI (Belief-Desire-Intention) architecture. It continuously senses the grid-based environment, builds a local representation of the world, and uses utility-based decision-making to efficiently navigate the map, collect parcels, and drop them off at designated delivery zones.
+This project implements a multi-agent system for the Deliveroo.js environment. The first agent is built using a BDI (Belief-Desire-Intention) architecture. It continuously senses the grid-based environment, builds a local representation of the world, and uses utility-based decision-making to efficiently navigate the map, collect parcels, and drop them off at designated delivery zones.
+The second agent is built using a LLM (Large Language Model) architecture. It uses a LLM to plan and execute actions.
 
-## Architectural Choices
+## BDI Agent
+
+### Architectural Choices
 - **BDI Architecture**: The agent strictly separates its internal state representation (**Beliefs**) from its goal evaluation (**Desires/Deliberation**) and its actionable sequences (**Intentions/Plans**).
 - **Utility-Based Deliberation**: Instead of just picking the closest parcel, the agent evaluates all known parcels using a utility function: `U = Reward - (TravelCost + DeliveryCost)`. This ensures the agent prioritizes the most profitable actions.
 - **Dynamic Pathfinding**: A custom implementation of the A* algorithm is used. It is aware of dynamic obstacles (automatically routing around other agents) and strictly respects map directional constraints (arrow tiles).
 - **Robustness and Latency Compensation**: The agent interacts with a remote server via WebSockets. To handle network unreliability, all critical SDK actions (`emitMove`, `emitPickup`, `emitPutdown`) are wrapped in custom retry logic (`_retryableCall`). The execution loop operates aggressively, allowing the agent to perform multi-step operations (like moving and picking up) seamlessly without dropping the cycle.
 
-## Directory Structure
+### Directory Structure
 ```text
 BDI_Agent/
 ├── .env                # Environment variables (Server URL, Authentication Tokens)
@@ -18,13 +21,13 @@ BDI_Agent/
     ├── agents.js       # Core BDIAgent class. Coordinates the BDI cycle: delegates to desires/intentions, handles replanning triggers, and runs the execution loop.
     ├── beliefs.js      # Beliefs class. Manages the agent's memory: parses the map, tracks parcels/agents, and implements "forgetting" logic.
     ├── desires.js      # Desires module. Evaluates the beliefs and computes utility scores to propose a set of prioritized goal candidates.
-    ├── intentions.js   # Intentions module. Maps selected goals (pickParcel, deliverParcel, wander) to concrete actionable plans using A*.
+    ├── intentions.js   # Intentions module. Maps selected goals (pickParcel, deliverParcel, goToSpawn) to concrete actionable plans using A*.
     └── pathfinding.js  # A* search algorithm adapted for Deliveroo constraints (dynamic obstacles and one-way arrows).
 ```
 
-## Operational Flow
+### Operational Flow
 
-### 1. Sensing & Belief Revision
+#### 1. Sensing & Belief Revision
 The system is driven by `sensing` events received from the server (handled in `index.js`). 
 - On every tick, the agent updates its internal `Beliefs` with newly seen parcels and agents. 
 - **Forgetting Logic**: The agent uses a sophisticated forgetting mechanism. If a previously seen parcel is expected to be in the current field of view but is no longer reported by the server, it is assumed stolen and removed from memory. Parcels outside the field of view expire based on a temporal threshold.
@@ -50,3 +53,5 @@ The `step()` method is the heart of the agent, executing the generated plan in a
   - A significantly better opportunity (a new parcel with much higher utility) has been discovered.
 - **Action Execution**: The agent processes `executePlanStep()`. If a movement fails (e.g., due to an obstacle not caught by A*), the agent retries quickly before eventually triggering a full replan.
 - **Immediate Re-evaluation**: Upon successfully completing a terminal action (`pickup`/`putdown`), the loop immediately clears the intention and loops back to deliberation. This prevents the agent from sitting idle waiting for the next server sensing event, drastically increasing delivery throughput.
+
+## LLM Agent
