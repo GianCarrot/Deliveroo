@@ -268,7 +268,7 @@ export class BDIAgent {
             const oldY = Math.round(this.beliefs.me.y);
 
             // Pre-move safety check: abort if destination is unsafe
-            const dirDelta = { up: [0,1], down: [0,-1], left: [-1,0], right: [1,0] };
+            const dirDelta = { up: [0, 1], down: [0, -1], left: [-1, 0], right: [1, 0] };
             const [dx, dy] = dirDelta[dir];
             const destX = oldX + dx;
             const destY = oldY + dy;
@@ -329,6 +329,21 @@ export class BDIAgent {
                     }
                 }
                 // Position changed — move succeeded despite timeout
+            }
+            // Opportunistic pickup - if we land on a tile with uncollected parcels, grab them 
+            const curX = Math.round(this.beliefs.me.x);
+            const curY = Math.round(this.beliefs.me.y);
+            const parcelsHere = this.beliefs.getParcelsAt(curX, curY);
+            if (parcelsHere.length > 0) {
+                console.log(`Opportunistic pickup: ${parcelsHere.length} parcel(s) at (${curX},${curY})`);
+                await this._waitForPositionStable();
+                const pickResult = await this._retryableCall(
+                    () => this.socket.emitPickup(), "OpportunisticPickup"
+                );
+                if (Array.isArray(pickResult) && pickResult.length > 0) {
+                    this.beliefs.addCarriedParcels(pickResult);
+                    console.log(`Opportunistically picked up ${pickResult.length} parcel(s)`);
+                }
             }
             return true;
         }
