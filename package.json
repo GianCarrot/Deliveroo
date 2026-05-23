@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@unitn-asa/pddl-client": "^1.7.7",
+    "dotenv": "^17.4.2",
+    "duck-duck-scrape": "^2.2.7",
+    "openai": "^6.37.0"
+  }
+}

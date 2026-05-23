@@ -268,7 +268,7 @@ export class BDIAgent {
             const oldY = Math.round(this.beliefs.me.y);
 
             // Pre-move safety check: abort if destination is unsafe
-            const dirDelta = { up: [0,1], down: [0,-1], left: [-1,0], right: [1,0] };
+            const dirDelta = { up: [0, 1], down: [0, -1], left: [-1, 0], right: [1, 0] };
             const [dx, dy] = dirDelta[dir];
             const destX = oldX + dx;
             const destY = oldY + dy;
@@ -289,35 +289,10 @@ export class BDIAgent {
                 return false;
             }
 
-            // Check agent-occupied tile — retry with delays since agents are dynamic
-            let agentBlocked = false;
+            // Check agent-occupied tile
             for (const agent of this.beliefs.agentsMap.values()) {
                 if (Math.round(agent.x) === destX && Math.round(agent.y) === destY) {
-                    agentBlocked = true;
-                    break;
-                }
-            }
-            if (agentBlocked) {
-                // Wait and retry up to 3 times — the other agent might move
-                const MAX_AGENT_RETRIES = 3;
-                const AGENT_RETRY_DELAY = 300; // ms
-                let cleared = false;
-                for (let retry = 0; retry < MAX_AGENT_RETRIES; retry++) {
-                    await new Promise(res => setTimeout(res, AGENT_RETRY_DELAY));
-                    let stillBlocked = false;
-                    for (const agent of this.beliefs.agentsMap.values()) {
-                        if (Math.round(agent.x) === destX && Math.round(agent.y) === destY) {
-                            stillBlocked = true;
-                            break;
-                        }
-                    }
-                    if (!stillBlocked) {
-                        cleared = true;
-                        break;
-                    }
-                }
-                if (!cleared) {
-                    console.log(`Move ${dir} blocked by agent at (${destX},${destY}) — giving up after retries`);
+                    console.log(`Move ${dir} blocked by agent at (${destX},${destY})`);
                     return false;
                 }
             }
@@ -355,8 +330,7 @@ export class BDIAgent {
                 }
                 // Position changed — move succeeded despite timeout
             }
-
-            // ── Opportunistic pickup: if we landed on a tile with uncollected parcels, grab them ──
+            // Opportunistic pickup - if we land on a tile with uncollected parcels, grab them 
             const curX = Math.round(this.beliefs.me.x);
             const curY = Math.round(this.beliefs.me.y);
             const parcelsHere = this.beliefs.getParcelsAt(curX, curY);
@@ -371,7 +345,6 @@ export class BDIAgent {
                     console.log(`Opportunistically picked up ${pickResult.length} parcel(s)`);
                 }
             }
-
             return true;
         }
 

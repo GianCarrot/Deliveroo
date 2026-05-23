@@ -11,7 +11,7 @@ const agent = new BDIAgent(socket, beliefs);
 
 
 
-// Stato precedente per evitare log ripetuti
+// Previous position to avoid repeated logs
 let lastPos = { x: null, y: null };
 
 // ─── Event Listeners ─────────────────────────────────

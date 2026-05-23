@@ -18,20 +18,11 @@ export function getDesires(agent) {
     const myDeliveryCost = myNearestDelivery
         ? agent.manhattan(myPos, myNearestDelivery) : Infinity;
 
-    // Pre-compute agent-occupied cells for quick lookup
-    const agentOccupied = new Set();
-    for (const ag of beliefs.agentsMap.values()) {
-        agentOccupied.add(`${Math.round(ag.x)},${Math.round(ag.y)}`);
-    }
-
     // 1. Evaluate all uncarried parcels for pickup
     for (const p of parcels) {
         if (p.carriedBy) continue;
 
         const parcelPos = { x: Math.round(p.x), y: Math.round(p.y) };
-
-        // Skip parcels on tiles occupied by other agents (likely being picked up)
-        if (agentOccupied.has(`${parcelPos.x},${parcelPos.y}`)) continue;
         const travelCost = agent.manhattan(myPos, parcelPos);
         const deliveryFromParcel = agent._nearestDeliveryFrom(parcelPos);
         const deliveryCostFromParcel = deliveryFromParcel
