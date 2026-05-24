@@ -289,10 +289,35 @@ export class BDIAgent {
                 return false;
             }
 
-            // Check agent-occupied tile
+            // Check agent-occupied tile — retry with delays since agents are dynamic
+            let agentBlocked = false;
             for (const agent of this.beliefs.agentsMap.values()) {
                 if (Math.round(agent.x) === destX && Math.round(agent.y) === destY) {
-                    console.log(`Move ${dir} blocked by agent at (${destX},${destY})`);
+                    agentBlocked = true;
+                    break;
+                }
+            }
+            if (agentBlocked) {
+                // Wait and retry up to 3 times — the other agent might move
+                const MAX_AGENT_RETRIES = 3;
+                const AGENT_RETRY_DELAY = 300; // ms
+                let cleared = false;
+                for (let retry = 0; retry < MAX_AGENT_RETRIES; retry++) {
+                    await new Promise(res => setTimeout(res, AGENT_RETRY_DELAY));
+                    let stillBlocked = false;
+                    for (const agent of this.beliefs.agentsMap.values()) {
+                        if (Math.round(agent.x) === destX && Math.round(agent.y) === destY) {
+                            stillBlocked = true;
+                            break;
+                        }
+                    }
+                    if (!stillBlocked) {
+                        cleared = true;
+                        break;
+                    }
+                }
+                if (!cleared) {
+                    console.log(`Move ${dir} blocked by agent at (${destX},${destY}) — giving up after retries`);
                     return false;
                 }
             }
@@ -330,6 +355,23 @@ export class BDIAgent {
                 }
                 // Position changed — move succeeded despite timeout
             }
+
+            // ── Opportunistic pickup: if we landed on a tile with uncollected parcels, grab them ──
+            const curX = Math.round(this.beliefs.me.x);
+            const curY = Math.round(this.beliefs.me.y);
+            const parcelsHere = this.beliefs.getParcelsAt(curX, curY);
+            if (parcelsHere.length > 0) {
+                console.log(`Opportunistic pickup: ${parcelsHere.length} parcel(s) at (${curX},${curY})`);
+                await this._waitForPositionStable();
+                const pickResult = await this._retryableCall(
+                    () => this.socket.emitPickup(), "OpportunisticPickup"
+                );
+                if (Array.isArray(pickResult) && pickResult.length > 0) {
+                    this.beliefs.addCarriedParcels(pickResult);
+                    console.log(`Opportunistically picked up ${pickResult.length} parcel(s)`);
+                }
+            }
+
             return true;
         }
 
