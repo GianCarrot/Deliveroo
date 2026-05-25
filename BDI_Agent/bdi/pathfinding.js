@@ -33,6 +33,14 @@ export function aStar(start, goal, beliefs) {
         }
     }
 
+    // Build a set of cells occupied by crates
+    const crateCells = new Set();
+    for (const crate of beliefs.cratesMap.values()) {
+        const cx = Math.round(crate.x);
+        const cy = Math.round(crate.y);
+        crateCells.add(key(cx, cy));
+    }
+
     const startKey = key(start.x, start.y);
     const open = new Set([startKey]);
     const closed = new Set();
@@ -48,11 +56,57 @@ export function aStar(start, goal, beliefs) {
         return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
     }
 
+    function canMoveTo(fromX, fromY, x, y) {
+        if (x < 0 || y < 0 || x >= beliefs.mapWidth || y >= beliefs.mapHeight) {
+            return false;
+        }
+        
+        const targetTileType = beliefs.getTileType(x, y);
+        if (!targetTileType || targetTileType === '0') {
+            return false;
+        }
+
+        const targetKey = key(x, y);
+
+        if (agentCells.has(targetKey)) {
+            return false;
+        }
+
+        if (crateCells.has(targetKey)) {
+            const dx = x - fromX;
+            const dy = y - fromY;
+            
+            const nextX = x + dx;
+            const nextY = y + dy;
+            
+            if (nextX < 0 || nextY < 0 || nextX >= beliefs.mapWidth || nextY >= beliefs.mapHeight) {
+                return false;
+            }
+            
+            const nextTileType = beliefs.getTileType(nextX, nextY);
+            if (!nextTileType || !nextTileType.startsWith('5')) {
+                return false;
+            }
+
+            const nextKey = key(nextX, nextY);
+            if (crateCells.has(nextKey)) {
+                return false;
+            }
+
+            const hasAgentAtNext = beliefs.agents.some(a => Math.round(a.x) === nextX && Math.round(a.y) === nextY);
+            if (hasAgentAtNext) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /**
      * Returns valid neighbor cells from (x, y), respecting:
      * - Map bounds and walkability
      * - Arrow tile directional constraints (from the CURRENT cell)
-     * - Dynamic obstacles (other agents)
+     * - Dynamic obstacles (other agents and crates)
      */
     function neighbors(x, y) {
         const tileType = beliefs.getTileType(x, y);
@@ -62,8 +116,8 @@ export function aStar(start, goal, beliefs) {
             const [dx, dy] = ARROW_DIRECTION[tileType];
             const nx = x + dx;
             const ny = y + dy;
-            const nk = key(nx, ny);
-            if (beliefs.walkableTiles.has(nk) && !agentCells.has(nk)) {
+            
+            if (canMoveTo(x, y, nx, ny)) {
                 return [[nx, ny]];
             }
             return [];
@@ -78,9 +132,7 @@ export function aStar(start, goal, beliefs) {
         return dirs
             .map(([dx, dy]) => [x + dx, y + dy, dx, dy])
             .filter(([nx, ny, dx, dy]) => {
-                const nk = key(nx, ny);
-                if (!beliefs.walkableTiles.has(nk)) return false;
-                if (agentCells.has(nk)) return false;
+                if (!canMoveTo(x, y, nx, ny)) return false;
 
                 // Block entering an arrow tile that points opposite to our direction
                 const destType = beliefs.getTileType(nx, ny);

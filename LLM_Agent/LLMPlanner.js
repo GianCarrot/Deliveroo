@@ -58,21 +58,21 @@ export class LLMPlanner {
       })
     });
 
-    // 🔥 Devi leggere il JSON qui
+    // Read JSON
     const data = await response.json();
     console.log("RAW DATA =", data);
 
-    // 🔥 Ora puoi estrarre il testo
+    // Extract Text
     const text = data.choices?.[0]?.message?.content ?? "[]";
-  
+
     console.log("Text = ")
     console.log(text)
 
     try {
-        const plan = JSON.parse(text);
-        return Array.isArray(plan) ? plan : [];
-      } catch {
-        return [];
+      const plan = JSON.parse(text);
+      return Array.isArray(plan) ? plan : [];
+    } catch {
+      return [];
     }
   }
 }

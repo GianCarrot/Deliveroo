@@ -1,10 +1,10 @@
 import { DjsConnect } from '@unitn-asa/deliveroo-js-sdk'
 
-export function connect() {
-    const host = process.env.HOST;
-    const TOKEN = process.env.TOKEN;
+export function connect(host, token) {
+    const h = host || process.env.HOST;
+    const t = token || process.env.TOKEN;
 
-    const socket = DjsConnect(host, TOKEN, 
+    const socket = DjsConnect(h, t, 
         {
         reconnection: true,
         reconnectionAttempts: Infinity,

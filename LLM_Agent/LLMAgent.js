@@ -7,7 +7,15 @@ export class LLMAgent {
 
         this.plan = [];
         this.currentObjective = null;
+        this.partnerId = null;
+        this.partnerIntentions = new Set();
     }
+
+    setPartnerId(id) {
+        this.partnerId = id;
+        console.log(`[LLM] Partner ID set to: ${id}`);
+    }
+
 
     async setObjective(objectiveText) {
         this.currentObjective = objectiveText;

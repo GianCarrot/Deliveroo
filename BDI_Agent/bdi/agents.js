@@ -11,6 +11,15 @@ export class BDIAgent {
         this.intention = null;   // { type: "...", target?, utility? }
         this.plan = [];          // [{ action: "move", dir }, ...]
         this._stepping = false;  // Mutex to prevent concurrent step() calls
+
+        // Inter-agent coordination
+        this.partnerId = null;
+        this.partnerIntentions = new Set(); // parcel IDs the partner has committed to
+    }
+
+    setPartnerId(id) {
+        this.partnerId = id;
+        console.log(`[BDI] Partner ID set to: ${id}`);
     }
 
     // ---------- UTILITIES ----------

@@ -28,6 +28,9 @@ export function getDesires(agent) {
     for (const p of parcels) {
         if (p.carriedBy) continue;
 
+        // Skip parcels that partner has committed to
+        if (agent.partnerIntentions.has(p.id)) continue;
+
         const parcelPos = { x: Math.round(p.x), y: Math.round(p.y) };
 
         // Skip parcels on tiles occupied by other agents (likely being picked up)

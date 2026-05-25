@@ -1,21 +1,15 @@
 export class LLMReplanner {
-  constructor() { }
+    constructor() {}
 
-  async replan(memory, planner) {
-    // 1. Update world state in memory
-    memory.updateWorld(memory.bdi.beliefs);
+    async replan(memory, planner, reason = "unknown") {
+        memory.updateWorld();
 
-    // 2. Log in history
-    memory.history.push({
-      type: "replan",
-      reason: "world_changed_or_action_failed",
-      timestamp: Date.now()
-    });
+        memory.history.push({
+            type: "replan",
+            reason,
+            timestamp: Date.now(),
+        });
 
-    // 3. Ask for a new plan to the LLM Planner
-    const newPlan = await planner.plan(memory);
-
-    // 4. Return the new plan
-    return newPlan;
-  }
+        return await planner.plan(memory);
+    }
 }

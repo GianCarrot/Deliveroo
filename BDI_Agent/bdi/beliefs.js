@@ -57,6 +57,10 @@ export class Beliefs {
         /** @type {Map<string, IOAgent>} id -> agent data */
         this.agentsMap = new Map();
 
+        // --- Crates ---
+        /** @type {Map<string, Object>} id -> crate data */
+        this.cratesMap = new Map();
+
         // --- Configuration (default values, updated by updateConfig) ---
         /** @type {number|'infinite'} Observation distance (Manhattan) */
         this.observationDistance = 5;
@@ -252,6 +256,40 @@ export class Beliefs {
      */
     get agents() {
         return Array.from(this.agentsMap.values());
+    }
+
+    // ─────────────────────────────────────────────
+    //  CRATES
+    // ─────────────────────────────────────────────
+
+    /**
+     * Updates the positions of crates.
+     * @param {Object[]} visibleCrates
+     */
+    updateCrates(visibleCrates) {
+        const visibleCells = this._getVisibleCells();
+        const visibleCrateIds = new Set();
+
+        for (const crate of visibleCrates) {
+            visibleCrateIds.add(crate.id);
+            this.cratesMap.set(crate.id, { ...crate, lastSeen: Date.now() });
+        }
+
+        for (const [id, crate] of this.cratesMap.entries()) {
+            if (visibleCrateIds.has(id)) continue;
+            const cellKey = `${Math.round(crate.x)},${Math.round(crate.y)}`;
+            if (visibleCells === null || visibleCells.has(cellKey)) {
+                this.cratesMap.delete(id);
+            }
+        }
+    }
+
+    /**
+     * Getter for the array of tracked crates.
+     * @returns {Object[]}
+     */
+    get crates() {
+        return Array.from(this.cratesMap.values());
     }
 
     /**
