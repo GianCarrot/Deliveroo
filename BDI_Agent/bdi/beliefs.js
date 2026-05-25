@@ -189,9 +189,6 @@ export class Beliefs {
         const now = Date.now();
         const results = [];
         for (const p of this.parcelsMap.values()) {
-            // Skip parcels carried by other agents
-            if (p.carriedBy && p.carriedBy !== this.me.id) continue;
-
             let currentReward = p.originalReward;
 
             if (this.parcelDecayIntervalMs !== null) {
@@ -289,24 +286,16 @@ export class Beliefs {
         return this.tileTypeMap.get(`${x},${y}`);
     }
 
-    /**
-     * Returns uncarried parcels located at the given tile position.
-     * Used for opportunistic pickup when passing over a tile.
-     * @param {number} x
-     * @param {number} y
-     * @returns {Object[]}
-     */
     getParcelsAt(x, y) {
         const results = [];
         for (const p of this.parcelsMap.values()) {
-            if (p.carriedBy) continue; // skip carried parcels
+            if (p.carriedBy) continue;
             if (Math.round(p.x) === x && Math.round(p.y) === y) {
                 results.push(p);
             }
         }
         return results;
     }
-
     // ─────────────────────────────────────────────
     //  INTERNAL UTILITIES
     // ─────────────────────────────────────────────
