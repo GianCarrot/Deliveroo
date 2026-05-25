@@ -75,6 +75,14 @@ export class Beliefs {
      * Updates game parameters from the server configuration.
      * @param {IOConfig} config
      */
+    updateMe(me) {
+        this.me.id = me.id;
+        this.me.name = me.name;
+        this.me.x = me.x;
+        this.me.y = me.y;
+        this.me.score = me.score;
+    }
+
     updateConfig(config) {
         if (config?.GAME?.player?.observation_distance !== undefined) {
             const dist = config.GAME.player.observation_distance;
