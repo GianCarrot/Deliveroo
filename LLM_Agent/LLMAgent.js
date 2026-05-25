@@ -15,12 +15,13 @@ export class LLMAgent {
 
         this.memory.updateWorld();
         this.plan = await this.planner.plan(this.memory);
+        console.log("Generated Plan:", this.plan);
 
         this.memory.history.push({
-        type: "new_objective",
-        objective: objectiveText,
-        planLength: this.plan.length,
-        timestamp: Date.now(),
+            type: "new_objective",
+            objective: objectiveText,
+            planLength: this.plan.length,
+            timestamp: Date.now()
         });
     }
 
@@ -32,29 +33,29 @@ export class LLMAgent {
         const args = step.args || [];
 
         try {
-        const result = await this.executor.execute(tool, ...args);
+            const result = await this.executor.execute(tool, ...args);
 
-        this.memory.history.push({
-            type: "action",
-            tool,
-            args,
-            result,
-            timestamp: Date.now(),
-        });
+            this.memory.history.push({
+                type: "action",
+                tool,
+                args,
+                result,
+                timestamp: Date.now(),
+            });
 
-        if (this.memory.hasWorldChanged()) {
-            this.plan = await this.replanner.replan(this.memory, this.planner, "world_changed");
-        }
+            if (this.memory.hasWorldChanged()) {
+                this.plan = await this.replanner.replan(this.memory, this.planner, "world_changed");
+            }
         } catch (err) {
-        this.memory.history.push({
-            type: "action_error",
-            tool,
-            args,
-            error: err.message,
-            timestamp: Date.now(),
-        });
+            this.memory.history.push({
+                type: "action_error",
+                tool,
+                args,
+                error: err.message,
+                timestamp: Date.now(),
+            });
 
-        this.plan = await this.replanner.replan(this.memory, this.planner, "action_failed");
+            this.plan = await this.replanner.replan(this.memory, this.planner, "action_failed");
         }
     }
 }

@@ -12,7 +12,8 @@ export class LLMMemory {
   }
 
   hasWorldChanged() {
-    if (!this.worldSnapshot) return false;
+    if (!this.worldSnapshot) 
+      return false;
     const now = this.bdi.beliefs ?? {};
     
     const prevParcels = this.worldSnapshot.parcels ?? [];
