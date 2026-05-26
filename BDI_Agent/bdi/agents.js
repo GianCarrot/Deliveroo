@@ -12,6 +12,10 @@ export class BDIAgent {
         this.plan = [];          // [{ action: "move", dir }, ...]
         this._stepping = false;  // Mutex to prevent concurrent step() calls
 
+        // Delivery tile blacklist: temporarily skip tiles blocked by agents
+        this._blockedDeliveryTiles = new Map(); // key → expiry timestamp
+        this._moveFailCount = 0;  // consecutive move failures during current plan
+
         // Inter-agent coordination
         this.partnerId = null;
         this.partnerIntentions = new Set(); // parcel IDs the partner has committed to
@@ -54,14 +58,27 @@ export class BDIAgent {
      * Returns the nearest delivery tile from a given position.
      */
     _nearestDeliveryFrom(pos) {
-        const deliveries = (this.beliefs.tiles || []).filter(t => String(t.type) === "2");
-        if (deliveries.length === 0) return null;
+        const now = Date.now();
+        // Clean expired blacklist entries
+        for (const [k, expiry] of this._blockedDeliveryTiles) {
+            if (now > expiry) this._blockedDeliveryTiles.delete(k);
+        }
 
-        return deliveries.sort((a, b) => {
-            const d1 = this.manhattan(pos, a);
-            const d2 = this.manhattan(pos, b);
-            return d1 - d2;
-        })[0];
+        const deliveries = (this.beliefs.tiles || [])
+            .filter(t => String(t.type) === "2")
+            .filter(t => !this._blockedDeliveryTiles.has(`${t.x},${t.y}`));
+
+        if (deliveries.length === 0) {
+            // All blacklisted — clear blacklist and try again
+            this._blockedDeliveryTiles.clear();
+            const allDeliveries = (this.beliefs.tiles || []).filter(t => String(t.type) === "2");
+            if (allDeliveries.length === 0) return null;
+            allDeliveries.sort((a, b) => this.manhattan(pos, a) - this.manhattan(pos, b));
+            return allDeliveries[0];
+        }
+
+        deliveries.sort((a, b) => this.manhattan(pos, a) - this.manhattan(pos, b));
+        return deliveries[0];
     }
 
     getNearestDeliveryTile() {
@@ -440,17 +457,32 @@ export class BDIAgent {
                             console.log(`Replanning: ${replanReason}`);
                             this.intention = null;
                             this.plan = [];
+                            this._moveFailCount = 0;
                             break;
                         }
                     }
 
                     const success = await this.executePlanStep();
                     if (!success) {
+                        this._moveFailCount++;
+
+                        // If delivering and failing repeatedly, blacklist this delivery tile
+                        if (this.intention?.type === "deliverParcel" && this._moveFailCount >= 2) {
+                            const target = this.getNearestDeliveryTile();
+                            if (target) {
+                                const key = `${Math.round(target.x)},${Math.round(target.y)}`;
+                                this._blockedDeliveryTiles.set(key, Date.now() + 10000); // 10s
+                                console.log(`Blacklisted delivery tile ${key} (blocked ${this._moveFailCount}x) — trying another`);
+                            }
+                            this._moveFailCount = 0;
+                        }
+
                         this.intention = null;
                         this.plan = [];
                         break;
                     }
 
+                    this._moveFailCount = 0; // reset on successful step
                     if (!this.intention) break;
                 }
 

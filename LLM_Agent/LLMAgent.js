@@ -95,6 +95,19 @@ export class LLMAgent {
             if (result) {
                 console.log(`[LLM] Turn completed: ${result.substring(0, 100)}`);
             }
+
+            // ─── Replanner check (§3) ────────────────────────
+            // If the world changed significantly during this turn,
+            // immediately replan with fresh context
+            if (this.replanner.shouldReplan(this.memory)) {
+                console.log("[LLM] World changed during turn → replanning...");
+                const replanResult = await this.replanner.replan(
+                    this.memory, this.planner, this.executor, "world_changed"
+                );
+                if (replanResult) {
+                    console.log(`[LLM] Replan result: ${replanResult.substring(0, 100)}`);
+                }
+            }
         } catch (err) {
             console.error("[LLM] Turn error:", err.message);
             this.memory.history.push({

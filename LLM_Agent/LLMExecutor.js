@@ -373,6 +373,11 @@ export class LLMExecutor {
             msg += ` Carrying ${carrying} parcel(s).`;
         }
 
+        // If navigation to a delivery tile failed, suggest trying a different one
+        if (issue && this.beliefs.deliveryTiles.has(`${targetX},${targetY}`)) {
+            msg += ` WARNING: delivery tile (${targetX},${targetY}) is blocked. Use get_delivery_tiles() and plan_route to a DIFFERENT delivery tile.`;
+        }
+
         // Report visible parcels so the LLM can decide to pick them up
         const visible = this.beliefs.parcels
             .filter(p => !p.carriedBy)
