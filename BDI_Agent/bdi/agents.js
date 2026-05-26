@@ -150,14 +150,15 @@ export class BDIAgent {
         // Trigger 4: Better opportunity — new parcel with significantly higher U
         if (this.intention.type === "pickParcel" && this.intention.utility !== undefined) {
             const TOLERANCE = 2; // Threshold to avoid oscillation
-            const currentU = this.computeParcelUtility(this.intention.target);
-            const parcels = this.beliefs.parcels || [];
-
-            for (const p of parcels) {
-                if (p.carriedBy) continue;
-                if (p.id === this.intention.target?.id) continue;
-                const newU = this.computeParcelUtility(p);
-                if (newU > currentU + TOLERANCE) {
+            
+            const currentDesires = getDesires(this);
+            const bestDesire = currentDesires[0];
+            
+            if (bestDesire && bestDesire.type === "pickParcel" && bestDesire.target.id !== this.intention.target.id) {
+                const myTargetDesire = currentDesires.find(d => d.type === "pickParcel" && d.target.id === this.intention.target.id);
+                const currentU = myTargetDesire ? myTargetDesire.utility : this.computeParcelUtility(this.intention.target);
+                
+                if (bestDesire.utility > currentU + TOLERANCE) {
                     return "better_opportunity";
                 }
             }
