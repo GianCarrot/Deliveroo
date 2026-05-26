@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
-import { connect } from "../BDI_Agent/deliveroo/connection.js";
+import { connect } from "../shared/connection.js";
 import { Beliefs } from "../BDI_Agent/bdi/beliefs.js";
 
 import { LLMMemory } from "./LLMMemory.js";
@@ -8,7 +8,9 @@ import { LLMExecutor } from "./LLMExecutor.js";
 import { LLMPlanner } from "./LLMPlanner.js";
 import { LLMReplanner } from "./LLMReplanner.js";
 import { LLMAgent } from "./LLMAgent.js";
+import { initClient } from "./callModel.js";
 import { MSG } from "../shared/common_protocol.js";
+import { TOOL_DESCRIPTIONS } from "./tools/tools_index.js";
 
 /**
  * Starts the LLM Agent on the given socket.
@@ -19,17 +21,35 @@ import { MSG } from "../shared/common_protocol.js";
 export function startLLMAgent(socket, llmConfig) {
     const beliefs = new Beliefs();
 
-    const memory = new LLMMemory(beliefs);
-    const executor = new LLMExecutor(socket, beliefs);
-    const replanner = new LLMReplanner();
-    const planner = new LLMPlanner({
+    // ─── Initialise the shared LLM client (§7) ──────────
+    initClient({
         baseURL: llmConfig.baseURL,
         apiKey: llmConfig.apiKey,
         model: llmConfig.model,
     });
+
+    // ─── Create components ───────────────────────────────
+    const memory = new LLMMemory(beliefs);
+    const executor = new LLMExecutor(socket, beliefs);
+    const replanner = new LLMReplanner();
+    const planner = new LLMPlanner({ maxIterations: 30 });
     const llmAgent = new LLMAgent({ memory, planner, executor, replanner });
 
-    let objectiveSet = false;
+    // Wire back-reference so executor can read partner intentions
+    executor.setAgent(llmAgent);
+
+    // ─── Validate tools_index ↔ executor sync ────────────
+    const declared = Object.keys(TOOL_DESCRIPTIONS);
+    const implemented = Object.keys(executor.TOOLS);
+    const missing = declared.filter(t => !implemented.includes(t));
+    const undocumented = implemented.filter(t => !declared.includes(t));
+    if (missing.length) console.warn(`[LLM] ⚠️ Tools in tools_index but NOT implemented: ${missing.join(", ")}`);
+    if (undocumented.length) console.warn(`[LLM] ⚠️ Tools implemented but NOT in tools_index: ${undocumented.join(", ")}`);
+
+    let defaultObjectiveSet = false;
+
+    // ─── Change detection for emitSay (avoid chat spam) ──
+    let _lastParcelFP = "";
 
     // ─── Event Listeners ─────────────────────────────────
     socket.on("config", (config) => beliefs.updateConfig(config));
@@ -47,11 +67,15 @@ export function startLLMAgent(socket, llmConfig) {
                     beliefs.carriedParcels = carried.map(p => p.id);
                 }
 
-                // Share visible parcels with partner
+                // Share visible parcels with partner (only when changed)
                 if (llmAgent.partnerId) {
-                    try {
-                        await socket.emitSay(llmAgent.partnerId, MSG.beliefUpdate(sensing.parcels));
-                    } catch (e) { /* partner may not be connected yet */ }
+                    const fp = sensing.parcels.map(p => p.id).sort().join(",");
+                    if (fp !== _lastParcelFP) {
+                        _lastParcelFP = fp;
+                        try {
+                            await socket.emitSay(llmAgent.partnerId, MSG.beliefUpdate(sensing.parcels));
+                        } catch (e) { /* partner may not be connected yet */ }
+                    }
                 }
             }
 
@@ -59,31 +83,39 @@ export function startLLMAgent(socket, llmConfig) {
 
             memory.updateWorld();
 
-            // Set objective once when parcels are first seen
-            if (!objectiveSet && beliefs.parcels.length > 0) {
-                console.log("[LLM] World ready → setting objective...");
-                await llmAgent.setObjective("Collect the nearest parcel and deliver it");
-                objectiveSet = true;
+            // Set default autonomous objective as soon as the world is ready
+            if (!defaultObjectiveSet && beliefs.mapWidth) {
+                defaultObjectiveSet = true;
+                console.log("[LLM] World ready → starting autonomous collection...");
+                await llmAgent.setObjective(
+                    "Continuously collect parcels and deliver them to delivery tiles to maximise your score. " +
+                    "Pick the nearest high-reward parcel, pick it up, then go to the nearest delivery tile and put down. " +
+                    "If no parcels are visible, patrol near spawn tiles to find new ones. " +
+                    "If a partner agent (Agent A) is pursuing a parcel, avoid that parcel. Repeat forever."
+                );
+            } else {
+                await llmAgent.step();
             }
 
-            await llmAgent.step();
 
-            // Broadcast current intention to partner
-            if (llmAgent.partnerId && llmAgent.currentObjective) {
-                try {
-                    // LLM doesn't track individual parcel targets like BDI does,
-                    // so we send intent based on plan existence
-                    await socket.emitSay(llmAgent.partnerId, MSG.intentionClear());
-                } catch (e) { /* ignore */ }
-            }
         } catch (e) {
             console.error("[LLM] CRASH IN SENSING:", e);
         }
     });
 
-    // ─── Receive messages from partner ───────────────────
-    socket.on("msg", (fromId, fromName, msg) => {
+    // ─── Receive messages — NL objectives + team protocol ─────
+    socket.on("msg", async (fromId, fromName, msg) => {
+        // ── Case 1: Plain string → NL objective from user / mission-agent ──
+        if (typeof msg === "string") {
+            console.log(`[LLM] 📩 NL instruction from ${fromName}: "${msg}"`);
+            await llmAgent.setObjective(msg);
+            return;
+        }
+
         if (!msg || !msg.type) return;
+
+        // ── Case 2: Structured protocol → only accept from our team partner ──
+        if (fromId !== llmAgent.partnerId) return;
 
         if (msg.type === MSG.TYPES.BELIEF_UPDATE) {
             for (const p of msg.parcels) {
@@ -94,6 +126,7 @@ export function startLLMAgent(socket, llmConfig) {
                         originalReward: p.reward,
                     });
                 }
+                memory.updateLLMMemory("parcel", p);
             }
         } else if (msg.type === MSG.TYPES.INTENTION_COMMIT) {
             llmAgent.partnerIntentions.clear();

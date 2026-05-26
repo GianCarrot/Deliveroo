@@ -1,7 +1,7 @@
 import { getDesires } from "./desires.js";
 import { intentions } from "./intentions.js";
 
-import { aStar } from "./pathfinding.js";
+import { aStar } from "../../shared/pathfinding.js";
 
 export class BDIAgent {
     constructor(socket, beliefs) {

@@ -6,7 +6,7 @@
  */
 import dotenv from "dotenv";
 import fs from "fs";
-import { connect } from "./BDI_Agent/deliveroo/connection.js";
+import { connect } from "./shared/connection.js";
 import { startBDIAgent } from "./BDI_Agent/index.js";
 import { startLLMAgent } from "./LLM_Agent/index.js";
 
@@ -31,9 +31,11 @@ const llm = startLLMAgent(socketB, {
 // ─── Exchange partner IDs after both connect ─────────────
 let bdiId = null;
 let llmId = null;
+let idsExchanged = false;
 
 function tryExchangeIds() {
-    if (bdiId && llmId) {
+    if (bdiId && llmId && !idsExchanged) {
+        idsExchanged = true;
         bdi.agent.setPartnerId(llmId);
         llm.llmAgent.setPartnerId(bdiId);
         console.log(`[main] Partner IDs exchanged: BDI=${bdiId} ↔ LLM=${llmId}`);
@@ -41,11 +43,9 @@ function tryExchangeIds() {
 }
 
 socketA.on("you", (me) => {
-    bdiId = me.id;
-    tryExchangeIds();
+    if (!bdiId) { bdiId = me.id; tryExchangeIds(); }
 });
 
 socketB.on("you", (me) => {
-    llmId = me.id;
-    tryExchangeIds();
+    if (!llmId) { llmId = me.id; tryExchangeIds(); }
 });

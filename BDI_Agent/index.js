@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
-import { connect } from "./deliveroo/connection.js";
+import { connect } from "../shared/connection.js";
 import { Beliefs } from "./bdi/beliefs.js";
 import { BDIAgent } from "./bdi/agents.js";
 import { MSG } from "../shared/common_protocol.js";
@@ -14,6 +14,10 @@ import { MSG } from "../shared/common_protocol.js";
 export function startBDIAgent(socket) {
     const beliefs = new Beliefs();
     const agent = new BDIAgent(socket, beliefs);
+
+    // ─── Change detection for emitSay (avoid chat spam) ──
+    let _lastParcelFP = "";
+    let _lastIntentionId = null;
 
     // ─── Event Listeners ─────────────────────────────────
     socket.on("config", (config) => {
@@ -42,11 +46,15 @@ export function startBDIAgent(socket) {
                     beliefs.carriedParcels = carriedParcels.map(p => p.id);
                 }
 
-                // Share visible parcels with partner
+                // Share visible parcels with partner (only when changed)
                 if (agent.partnerId) {
-                    try {
-                        await socket.emitSay(agent.partnerId, MSG.beliefUpdate(parcels));
-                    } catch (e) { /* partner may not be connected yet */ }
+                    const fp = parcels.map(p => p.id).sort().join(",");
+                    if (fp !== _lastParcelFP) {
+                        _lastParcelFP = fp;
+                        try {
+                            await socket.emitSay(agent.partnerId, MSG.beliefUpdate(parcels));
+                        } catch (e) { /* partner may not be connected yet */ }
+                    }
                 }
             }
 
@@ -60,24 +68,31 @@ export function startBDIAgent(socket) {
 
             await agent.step();
 
-            // Broadcast current intention to partner
+            // Send intention to partner (only when changed)
             if (agent.partnerId) {
-                try {
-                    if (agent.intention?.target?.id) {
-                        await socket.emitSay(agent.partnerId, MSG.intentionCommit(agent.intention.target.id));
-                    } else {
-                        await socket.emitSay(agent.partnerId, MSG.intentionClear());
-                    }
-                } catch (e) { /* ignore */ }
+                const curIntentionId = agent.intention?.target?.id || null;
+                if (curIntentionId !== _lastIntentionId) {
+                    _lastIntentionId = curIntentionId;
+                    try {
+                        if (curIntentionId) {
+                            await socket.emitSay(agent.partnerId, MSG.intentionCommit(curIntentionId));
+                        } else {
+                            await socket.emitSay(agent.partnerId, MSG.intentionClear());
+                        }
+                    } catch (e) { /* ignore */ }
+                }
             }
         } catch (e) {
             console.error("[BDI] CRASH IN SENSING EVENT:", e);
         }
     });
 
-    // ─── Receive messages from partner ───────────────────
+    // ─── Receive messages from team partner only ──────────
     socket.on("msg", (fromId, fromName, msg) => {
         if (!msg || !msg.type) return;
+
+        // Only process structured protocol messages from our team partner
+        if (fromId !== agent.partnerId) return;
 
         if (msg.type === MSG.TYPES.BELIEF_UPDATE) {
             for (const p of msg.parcels) {
