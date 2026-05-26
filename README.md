@@ -244,4 +244,3 @@ Agents communicate via the Deliveroo SDK's `socket.emitSay(partnerId, message)` 
 
 - Both agents **only accept structured protocol messages** from their registered partner (by ID).
 - Natural language strings are accepted from **any sender** (user, mission-agent, etc.).
-- The BDI agent **never writes to public chat**.
