@@ -113,7 +113,7 @@ export class BDIAgent {
         return candidates[0];
     }
 
-    // ---------- REPLANNING CHECKS (REQUIREMENTS §5) ----------
+    // ---------- REPLANNING CHECKS ----------
 
     /**
      * Checks if the current intention should be abandoned.
@@ -167,14 +167,14 @@ export class BDIAgent {
         // Trigger 4: Better opportunity — new parcel with significantly higher U
         if (this.intention.type === "pickParcel" && this.intention.utility !== undefined) {
             const TOLERANCE = 2; // Threshold to avoid oscillation
-            
+
             const currentDesires = getDesires(this);
             const bestDesire = currentDesires[0];
-            
+
             if (bestDesire && bestDesire.type === "pickParcel" && bestDesire.target.id !== this.intention.target.id) {
                 const myTargetDesire = currentDesires.find(d => d.type === "pickParcel" && d.target.id === this.intention.target.id);
                 const currentU = myTargetDesire ? myTargetDesire.utility : this.computeParcelUtility(this.intention.target);
-                
+
                 if (bestDesire.utility > currentU + TOLERANCE) {
                     return "better_opportunity";
                 }
@@ -327,7 +327,7 @@ export class BDIAgent {
             try {
                 const ok = await this.socket.emitMove(dir);
                 if (ok === false) {
-                    // Trigger 1 (REQUIREMENTS §5): retry once after delay
+                    // retry once after delay
                     await new Promise(res => setTimeout(res, 200));
                     const retryOk = await this.socket.emitMove(dir);
                     if (retryOk === false) {

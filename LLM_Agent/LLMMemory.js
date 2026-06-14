@@ -1,5 +1,5 @@
 /**
- * LLM Memory — §5 + §6 of GUIDE-PART-2.
+ * LLM Memory
  *
  * Holds the LLM context window: current objective, environment observations,
  * shared beliefs from Agent A, and action history.
@@ -10,7 +10,7 @@ export class LLMMemory {
         this.objective = null;
         this.worldSnapshot = null;
         this.history = [];
-        this.partnerBeliefs = [];          // beliefs received from Agent A (§6)
+        this.partnerBeliefs = [];          // beliefs received from the BDI Agent
     }
 
     /**
@@ -54,7 +54,7 @@ export class LLMMemory {
     }
 
     /**
-     * Incorporates a belief shared by Agent A — §6 of GUIDE-PART-2.
+     * Incorporates a belief shared by the BDI Agent
      * Called from socket.onSay handler.
      * @param {string} entity  — e.g. 'parcel'
      * @param {object} payload — the entity data
@@ -71,7 +71,6 @@ export class LLMMemory {
 
     /**
      * Builds a compact world-state summary for the LLM context.
-     * Keeps token usage low per §7 (Cost and Token Considerations).
      * @returns {string}
      */
     buildContext() {

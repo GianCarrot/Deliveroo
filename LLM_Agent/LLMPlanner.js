@@ -81,7 +81,7 @@ export class LLMPlanner {
             consecutiveErrors = 0; // reset on success
             messages.push({ role: "assistant", content: response });
 
-            // ─── Parse: Action + Action Input ────────────────
+            // Parse: Action + Action Input
             const actionMatch = response.match(/^Action:\s*(.+)$/im);
             const actionInputMatch = response.match(/^Action Input:\s*(.+)$/im);
 
@@ -119,7 +119,7 @@ export class LLMPlanner {
                 continue;
             }
 
-            // ─── Parse: Final Answer ─────────────────────────
+            // Parse: Final Answer
             const finalAnswerMatch = response.match(
                 /^Final Answer:\s*([\s\S]*)$/im
             );
@@ -129,7 +129,7 @@ export class LLMPlanner {
                 return answer;
             }
 
-            // ─── Unexpected format — nudge the LLM to retry ─
+            // Unexpected format — nudge the LLM to retry
             console.warn("[LLM] Unexpected format, nudging LLM to use correct format");
             messages.push({
                 role: "user",

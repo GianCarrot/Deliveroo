@@ -36,7 +36,7 @@ export class LLMAgent {
     }
 
     /**
-     * Level 1 / Level 2 — receive a new NL objective and immediately
+     * Receive a new NL objective and immediately
      * run the ReAct planning loop.
      * @param {string} objectiveText
      */
@@ -81,7 +81,7 @@ export class LLMAgent {
         await this._runTurn();
     }
 
-    // ─── Private helpers ──────────────────────────────────────
+    // Private helpers
 
     async _runTurn() {
         if (this._busy) return;
@@ -96,7 +96,7 @@ export class LLMAgent {
                 console.log(`[LLM] Turn completed: ${result.substring(0, 100)}`);
             }
 
-            // ─── Replanner check (§3) ────────────────────────
+            // Replanner check
             // If the world changed significantly during this turn,
             // immediately replan with fresh context
             if (this.replanner.shouldReplan(this.memory)) {
@@ -118,7 +118,7 @@ export class LLMAgent {
         } finally {
             this._busy = false;
             this._lastTurnEnd = Date.now();
-            
+
             // Auto-schedule the next turn so the agent NEVER relies solely 
             // on 'sensing' events (which stop arriving if nothing moves).
             setTimeout(() => this.step(), this._turnCooldownMs);

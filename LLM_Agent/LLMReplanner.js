@@ -1,5 +1,5 @@
 /**
- * LLM Replanner — §5 of GUIDE-PART-2.
+ * LLM Replanner
  *
  * Monitors execution; triggers re-planning if the environment changes
  * or the objective is updated. Uses ReAct / Reflexion reasoning
@@ -7,7 +7,7 @@
  * runAgentTurn iteration is aware of what went wrong.
  */
 export class LLMReplanner {
-    constructor() {}
+    constructor() { }
 
     /**
      * Checks whether replanning is needed.

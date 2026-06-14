@@ -1,8 +1,8 @@
 /**
- * TOOLS dict — §5 + §8 of GUIDE-PART-2.
+ * TOOLS dict
  *
  * Maps LLM action names directly to Deliveroo SDK calls.
- * Includes the PDDL plan_route tool (§8) and partner-intention query (§6).
+ * Includes the PDDL plan_route tool
  */
 import { aStar } from "../shared/pathfinding.js";
 
@@ -17,7 +17,6 @@ export class LLMExecutor {
         this.beliefs = beliefs;
         this.agent = agent;
 
-        // ─── TOOLS dict (§5) ──────────────────────────────────
         this.TOOLS = {
             get_my_position: async () => {
                 return JSON.stringify({
@@ -157,7 +156,7 @@ export class LLMExecutor {
             },
 
             /**
-             * Intention coordination — §6.
+             * Intention coordination
              * Returns the set of parcel IDs the partner BDI Agent A is pursuing.
              */
             get_agent_a_intentions: async () => {
@@ -227,18 +226,18 @@ export class LLMExecutor {
             // PDDL domain for navigation
             // Note: domain MUST be named 'default' to match PddlProblem's hardcoded (:domain default)
             const domainStr = `(define (domain default)
-  (:requirements :strips)
-  (:predicates
-    (tile ?t)
-    (at ?a ?t)
-    (adjacent ?t1 ?t2)
-  )
-  (:action move
-    :parameters (?a ?from ?to)
-    :precondition (and (at ?a ?from) (tile ?from) (tile ?to) (adjacent ?from ?to))
-    :effect (and (at ?a ?to) (not (at ?a ?from)))
-  )
-)`;
+                (:requirements :strips)
+                (:predicates
+                    (tile ?t)
+                    (at ?a ?t)
+                    (adjacent ?t1 ?t2)
+                )
+                (:action move
+                    :parameters (?a ?from ?to)
+                    :precondition (and (at ?a ?from) (tile ?from) (tile ?to) (adjacent ?from ?to))
+                    :effect (and (at ?a ?to) (not (at ?a ?from)))
+                )
+                )`;
 
             // PddlProblem.toPddlString() wraps goal in (), so don't add outer parens
             const problemStr = new PddlProblem(
@@ -294,7 +293,7 @@ export class LLMExecutor {
     }
 
 
-    // ─── A* Navigation ──────────────────────────────────────
+    // A* Navigation
 
     /**
      * Uses A* pathfinding to navigate to (x, y), executing each move via the socket.
