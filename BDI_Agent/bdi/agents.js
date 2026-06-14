@@ -26,7 +26,7 @@ export class BDIAgent {
         console.log(`[BDI] Partner ID set to: ${id}`);
     }
 
-    // ---------- UTILITIES ----------
+    // UTILITIES
 
     manhattan(a, b) {
         return Math.abs(Math.round(a.x) - Math.round(b.x)) +
@@ -104,7 +104,7 @@ export class BDIAgent {
         return actions;
     }
 
-    // ---------- DELIBERATION (UTILITY-BASED) ----------
+    // DELIBERATION (UTILITY-BASED)
 
     deliberate() {
         const candidates = getDesires(this);
@@ -113,7 +113,7 @@ export class BDIAgent {
         return candidates[0];
     }
 
-    // ---------- REPLANNING CHECKS ----------
+    // REPLANNING CHECKS
 
     /**
      * Checks if the current intention should be abandoned.
@@ -184,7 +184,7 @@ export class BDIAgent {
         return null;
     }
 
-    // ---------- PLANNER ----------
+    // PLANNER
 
     async planFor(intention) {
         if (intentions[intention.type]) {
@@ -265,7 +265,7 @@ export class BDIAgent {
         return [{ action: "move", dir: fallback.dir }];
     }
 
-    // ---------- PLAN EXECUTION ----------
+    // PLAN EXECUTION
 
     /**
      * Safely calls an async SDK method with retry logic for timeouts.
@@ -420,7 +420,7 @@ export class BDIAgent {
         return false;
     }
 
-    // ---------- BDI CYCLE ----------
+    //  BDI CYCLE
 
     /**
      * Executes the full BDI cycle: deliberate → plan → execute ALL steps.
