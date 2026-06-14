@@ -1,6 +1,5 @@
 /**
- * Shared LLM client wrapper — §7 of GUIDE-PART-2.
- * Wraps OpenAI-compatible API (LiteLLM / local / OpenAI) with error handling.
+ * Shared LLM client wrapper
  */
 import OpenAI from "openai";
 

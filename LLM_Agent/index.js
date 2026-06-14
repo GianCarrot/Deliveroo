@@ -21,14 +21,14 @@ import { TOOL_DESCRIPTIONS } from "./tools/tools_index.js";
 export function startLLMAgent(socket, llmConfig) {
     const beliefs = new Beliefs();
 
-    // ─── Initialise the shared LLM client (§7) ──────────
+    // Initialise the shared LLM client
     initClient({
         baseURL: llmConfig.baseURL,
         apiKey: llmConfig.apiKey,
         model: llmConfig.model,
     });
 
-    // ─── Create components ───────────────────────────────
+    // Create components
     const memory = new LLMMemory(beliefs);
     const executor = new LLMExecutor(socket, beliefs);
     const replanner = new LLMReplanner();
@@ -38,20 +38,20 @@ export function startLLMAgent(socket, llmConfig) {
     // Wire back-reference so executor can read partner intentions
     executor.setAgent(llmAgent);
 
-    // ─── Validate tools_index ↔ executor sync ────────────
+    // Validate tools_index ↔ executor sync
     const declared = Object.keys(TOOL_DESCRIPTIONS);
     const implemented = Object.keys(executor.TOOLS);
     const missing = declared.filter(t => !implemented.includes(t));
     const undocumented = implemented.filter(t => !declared.includes(t));
-    if (missing.length) console.warn(`[LLM] ⚠️ Tools in tools_index but NOT implemented: ${missing.join(", ")}`);
-    if (undocumented.length) console.warn(`[LLM] ⚠️ Tools implemented but NOT in tools_index: ${undocumented.join(", ")}`);
+    if (missing.length) console.warn(`[LLM] Tools in tools_index but NOT implemented: ${missing.join(", ")}`);
+    if (undocumented.length) console.warn(`[LLM] Tools implemented but NOT in tools_index: ${undocumented.join(", ")}`);
 
     let defaultObjectiveSet = false;
 
-    // ─── Change detection for emitSay (avoid chat spam) ──
+    // Change detection for emitSay (avoid chat spam)
     let _lastParcelFP = "";
 
-    // ─── Event Listeners ─────────────────────────────────
+    // Event Listeners
     socket.on("config", (config) => beliefs.updateConfig(config));
     socket.on("map", (width, height, tiles) => beliefs.updateMap(width, height, tiles));
     socket.on("you", (me) => beliefs.updateMe(me));
@@ -103,18 +103,18 @@ export function startLLMAgent(socket, llmConfig) {
         }
     });
 
-    // ─── Receive messages — NL objectives + team protocol ─────
+    // Receive messages — NL objectives + team protocol
     socket.on("msg", async (fromId, fromName, msg) => {
-        // ── Case 1: Plain string → NL objective from user / mission-agent ──
+        // Case 1: Plain string → NL objective from user / mission-agent
         if (typeof msg === "string") {
-            console.log(`[LLM] 📩 NL instruction from ${fromName}: "${msg}"`);
+            console.log(`[LLM] NL instruction from ${fromName}: "${msg}"`);
             await llmAgent.setObjective(msg);
             return;
         }
 
         if (!msg || !msg.type) return;
 
-        // ── Case 2: Structured protocol → only accept from our team partner ──
+        // Case 2: Structured protocol → only accept from our team partner
         if (fromId !== llmAgent.partnerId) return;
 
         if (msg.type === MSG.TYPES.BELIEF_UPDATE) {
@@ -142,7 +142,7 @@ export function startLLMAgent(socket, llmConfig) {
     return { socket, llmAgent, beliefs, memory };
 }
 
-// ─── Standalone mode ─────────────────────────────────────
+// Standalone mode
 const __filename = fileURLToPath(import.meta.url);
 if (process.argv[1] === __filename) {
     dotenv.config();

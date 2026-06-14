@@ -158,7 +158,7 @@ Runs the LLM agent standalone. It starts collecting parcels autonomously on conn
 
 ### Architecture
 
-Four-component design following the course specification (§3 of GUIDE-PART-2):
+Four-component design following the course specification:
 
 | Component | File | Role |
 |---|---|---|
