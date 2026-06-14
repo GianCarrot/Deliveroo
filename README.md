@@ -29,7 +29,7 @@ deliveroo/
 │   ├── .env                     # Agent A credentials (HOST, TOKEN)
 │   ├── .env.example             # Template for Agent A credentials
 │   ├── index.js                 # BDI entry point, event listeners, communication handlers
-│   └── bdi/
+│   └── modules/
 │       ├── agents.js            # BDIAgent class: BDI cycle, replanning, plan execution
 │       ├── beliefs.js           # Beliefs: map, parcels, agents, forgetting logic, tile types
 │       ├── desires.js           # Utility-based goal evaluation + partner intention filtering
@@ -39,11 +39,12 @@ deliveroo/
     ├── .env                     # Agent B credentials + LLM API configuration
     ├── .env.example             # Template for Agent B credentials
     ├── index.js                 # LLM entry point, event listeners, NL instruction handler
-    ├── LLMAgent.js              # Orchestrator: objective → ReAct loop → execute → replan
-    ├── LLMMemory.js             # Context window: world snapshots, partner beliefs, change detection
-    ├── LLMPlanner.js            # ReAct loop: LLM ↔ tool execution with retry and abort logic
-    ├── LLMReplanner.js          # Monitors world changes and triggers replanning between turns
-    ├── LLMExecutor.js           # Tool implementations: move, pickup, A* navigation, PDDL solver
+    ├── modules/
+        ├── LLMAgent.js              # Orchestrator: objective → ReAct loop → execute → replan
+        ├── LLMMemory.js             # Context window: world snapshots, partner beliefs, change detection
+        ├── LLMPlanner.js            # ReAct loop: LLM ↔ tool execution with retry and abort logic
+        ├── LLMReplanner.js          # Monitors world changes and triggers replanning between turns
+        └── LLMExecutor.js           # Tool implementations: move, pickup, A* navigation, PDDL solver
     ├── callModel.js             # OpenAI-compatible API wrapper with error handling
     ├── prompts/
     │   └── agentPrompt.js       # ReAct system prompt (dynamically generated from tools_index)

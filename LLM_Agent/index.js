@@ -1,13 +1,13 @@
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { connect } from "../shared/connection.js";
-import { Beliefs } from "../BDI_Agent/bdi/beliefs.js";
+import { Beliefs } from "../BDI_Agent/modules/beliefs.js";
 
-import { LLMMemory } from "./LLMMemory.js";
-import { LLMExecutor } from "./LLMExecutor.js";
-import { LLMPlanner } from "./LLMPlanner.js";
-import { LLMReplanner } from "./LLMReplanner.js";
-import { LLMAgent } from "./LLMAgent.js";
+import { LLMMemory } from "./modules/LLMMemory.js";
+import { LLMExecutor } from "./modules/LLMExecutor.js";
+import { LLMPlanner } from "./modules/LLMPlanner.js";
+import { LLMReplanner } from "./modules/LLMReplanner.js";
+import { LLMAgent } from "./modules/LLMAgent.js";
 import { initClient } from "./callModel.js";
 import { MSG } from "../shared/common_protocol.js";
 import { TOOL_DESCRIPTIONS } from "./tools/tools_index.js";

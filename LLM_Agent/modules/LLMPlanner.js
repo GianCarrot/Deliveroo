@@ -9,8 +9,8 @@
  * Resilience: on parse failures or errors, the planner retries with a nudge
  * instead of giving up.
  */
-import { callModel } from "./callModel.js";
-import { AGENT_PROMPT } from "./prompts/agentPrompt.js";
+import { callModel } from "../callModel.js";
+import { AGENT_PROMPT } from "../prompts/agentPrompt.js";
 
 export class LLMPlanner {
     constructor({ maxIterations = 15 } = {}) {
