@@ -1,67 +1,130 @@
 import dotenv from "dotenv";
-dotenv.config();
-
-import { connect } from "./deliveroo/connection.js";
+import { fileURLToPath } from "url";
+import { connect } from "../shared/connection.js";
 import { Beliefs } from "./bdi/beliefs.js";
 import { BDIAgent } from "./bdi/agents.js";
+import { MSG } from "../shared/common_protocol.js";
 
-const socket = connect();
-const beliefs = new Beliefs();
-const agent = new BDIAgent(socket, beliefs);
+/**
+ * Starts the BDI Agent on the given socket.
+ * Sets up event listeners, the BDI cycle, and inter-agent communication.
+ * @param {object} socket — connected Deliveroo socket
+ * @returns {{ socket, agent: BDIAgent, beliefs: Beliefs }}
+ */
+export function startBDIAgent(socket) {
+    const beliefs = new Beliefs();
+    const agent = new BDIAgent(socket, beliefs);
 
-console.log(socket, beliefs, agent)
+    // ─── Change detection for emitSay (avoid chat spam) ──
+    let _lastParcelFP = "";
+    let _lastIntentionId = null;
 
-// Previous position to avoid repeated logs
-let lastPos = { x: null, y: null };
+    // ─── Event Listeners ─────────────────────────────────
+    socket.on("config", (config) => {
+        beliefs.updateConfig(config);
+    });
 
-// ─── Event Listeners ─────────────────────────────────
+    socket.on("map", (width, height, tiles) => {
+        beliefs.updateMap(width, height, tiles);
+    });
 
-socket.on("config", (config) => {
-    beliefs.updateConfig(config);
-});
+    socket.on("you", (me) => {
+        beliefs.updateMe(me);
+    });
 
-socket.on("map", (width, height, tiles) => {
-    beliefs.updateMap(width, height, tiles);
-});
+    socket.on("sensing", async (sensing) => {
+        try {
+            const { parcels, agents: agentsList, crates } = sensing;
 
+            if (parcels) {
+                beliefs.updateParcels(parcels);
 
-socket.on("you", (me) => {
-    beliefs.me.id = me.id;
-    beliefs.me.name = me.name;
-    beliefs.me.x = me.x;
-    beliefs.me.y = me.y;
-    beliefs.me.score = me.score;
+                // Sync carried parcels from sensing (authoritative source)
+                if (beliefs.me.id) {
+                    const carriedParcels = parcels.filter(p => p.carriedBy === beliefs.me.id);
+                    beliefs.me.carrying = carriedParcels.length;
+                    beliefs.carriedParcels = carriedParcels.map(p => p.id);
+                }
 
-    const posChanged = Math.floor(me.x) !== lastPos.x || Math.floor(me.y) !== lastPos.y;
-    if (posChanged) {
-        lastPos.x = Math.floor(me.x);
-        lastPos.y = Math.floor(me.y);
-        console.log("You:", beliefs.me);
-    }
-});
+                // Share visible parcels with partner (only when changed)
+                if (agent.partnerId) {
+                    const fp = parcels.map(p => p.id).sort().join(",");
+                    if (fp !== _lastParcelFP) {
+                        _lastParcelFP = fp;
+                        try {
+                            await socket.emitSay(agent.partnerId, MSG.beliefUpdate(parcels));
+                        } catch (e) { /* partner may not be connected yet */ }
+                    }
+                }
+            }
 
-socket.on("sensing", async (sensing) => {
-    const { parcels, agents } = sensing;
+            if (agentsList) {
+                beliefs.updateAgents(agentsList);
+            }
 
-    if (parcels) {
-        beliefs.updateParcels(parcels);
-        if (beliefs.me.id) {
-            const carriedParcels = parcels.filter(p => p.carriedBy === beliefs.me.id);
-            beliefs.me.carrying = carriedParcels.reduce((sum, p) => sum + p.reward, 0);
+            if (crates) {
+                beliefs.updateCrates(crates);
+            }
+
+            await agent.step();
+
+            // Send intention to partner (only when changed)
+            if (agent.partnerId) {
+                const curIntentionId = agent.intention?.target?.id || null;
+                if (curIntentionId !== _lastIntentionId) {
+                    _lastIntentionId = curIntentionId;
+                    try {
+                        if (curIntentionId) {
+                            await socket.emitSay(agent.partnerId, MSG.intentionCommit(curIntentionId));
+                        } else {
+                            await socket.emitSay(agent.partnerId, MSG.intentionClear());
+                        }
+                    } catch (e) { /* ignore */ }
+                }
+            }
+        } catch (e) {
+            console.error("[BDI] CRASH IN SENSING EVENT:", e);
         }
-    }
+    });
 
-    if (agents) {
-        beliefs.updateAgents(agents);
-    }
+    // ─── Receive messages from team partner only ──────────
+    socket.on("msg", (fromId, fromName, msg) => {
+        if (!msg || !msg.type) return;
 
-    await agent.step();
-});
+        // Only process structured protocol messages from our team partner
+        if (fromId !== agent.partnerId) return;
 
-socket.on("connect", () => {
-    console.log("Connected to server");
-});
+        if (msg.type === MSG.TYPES.BELIEF_UPDATE) {
+            for (const p of msg.parcels) {
+                // Only add parcels we don't already know about and that aren't carried
+                if (!beliefs.parcelsMap.has(p.id) && !p.carriedBy) {
+                    beliefs.parcelsMap.set(p.id, {
+                        ...p,
+                        lastSeen: Date.now(),
+                        originalReward: p.reward,
+                    });
+                }
+            }
+        } else if (msg.type === MSG.TYPES.INTENTION_COMMIT) {
+            agent.partnerIntentions.clear();
+            if (msg.parcelId) {
+                agent.partnerIntentions.add(msg.parcelId);
+            }
+        } else if (msg.type === MSG.TYPES.INTENTION_CLEAR) {
+            agent.partnerIntentions.clear();
+        }
+    });
 
-socket.on("connect_error", (err) => {
-    console.log("Connection error:", err.message);
-});
+    socket.on("connect", () => console.log("[BDI] Connected to server"));
+    socket.on("connect_error", (err) => console.log("[BDI] Connection error:", err.message));
+
+    return { socket, agent, beliefs };
+}
+
+// ─── Standalone mode ─────────────────────────────────────
+const __filename = fileURLToPath(import.meta.url);
+if (process.argv[1] === __filename) {
+    dotenv.config();
+    const socket = connect();
+    startBDIAgent(socket);
+}

@@ -1,4 +1,4 @@
-import { aStar } from "./pathfinding.js";
+import { aStar } from "../../shared/pathfinding.js";
 
 /**
  * Arrow tile symbols mapped to the direction they force.

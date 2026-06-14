@@ -57,6 +57,10 @@ export class Beliefs {
         /** @type {Map<string, IOAgent>} id -> agent data */
         this.agentsMap = new Map();
 
+        // --- Crates ---
+        /** @type {Map<string, Object>} id -> crate data */
+        this.cratesMap = new Map();
+
         // --- Configuration (default values, updated by updateConfig) ---
         /** @type {number|'infinite'} Observation distance (Manhattan) */
         this.observationDistance = 5;
@@ -197,6 +201,9 @@ export class Beliefs {
         const now = Date.now();
         const results = [];
         for (const p of this.parcelsMap.values()) {
+            // Skip parcels carried by other agents
+            if (p.carriedBy && p.carriedBy !== this.me.id) continue;
+
             let currentReward = p.originalReward;
 
             if (this.parcelDecayIntervalMs !== null) {
@@ -251,6 +258,40 @@ export class Beliefs {
         return Array.from(this.agentsMap.values());
     }
 
+    // ─────────────────────────────────────────────
+    //  CRATES
+    // ─────────────────────────────────────────────
+
+    /**
+     * Updates the positions of crates.
+     * @param {Object[]} visibleCrates
+     */
+    updateCrates(visibleCrates) {
+        const visibleCells = this._getVisibleCells();
+        const visibleCrateIds = new Set();
+
+        for (const crate of visibleCrates) {
+            visibleCrateIds.add(crate.id);
+            this.cratesMap.set(crate.id, { ...crate, lastSeen: Date.now() });
+        }
+
+        for (const [id, crate] of this.cratesMap.entries()) {
+            if (visibleCrateIds.has(id)) continue;
+            const cellKey = `${Math.round(crate.x)},${Math.round(crate.y)}`;
+            if (visibleCells === null || visibleCells.has(cellKey)) {
+                this.cratesMap.delete(id);
+            }
+        }
+    }
+
+    /**
+     * Getter for the array of tracked crates.
+     * @returns {Object[]}
+     */
+    get crates() {
+        return Array.from(this.cratesMap.values());
+    }
+
     /**
      * Returns the number of parcels currently carried by the agent.
      * @returns {number}
@@ -294,10 +335,17 @@ export class Beliefs {
         return this.tileTypeMap.get(`${x},${y}`);
     }
 
+    /**
+     * Returns uncarried parcels located at the given tile position.
+     * Used for opportunistic pickup when passing over a tile.
+     * @param {number} x
+     * @param {number} y
+     * @returns {Object[]}
+     */
     getParcelsAt(x, y) {
         const results = [];
         for (const p of this.parcelsMap.values()) {
-            if (p.carriedBy) continue;
+            if (p.carriedBy) continue; // skip carried parcels
             if (Math.round(p.x) === x && Math.round(p.y) === y) {
                 results.push(p);
             }
