@@ -4,12 +4,12 @@
  * Maps LLM action names directly to Deliveroo SDK calls.
  * Includes the PDDL plan_route tool
  */
-import { aStar } from "../shared/pathfinding.js";
+import { aStar } from "../../shared/pathfinding.js";
 
 export class LLMExecutor {
     /**
      * @param {object} socket  — connected Deliveroo socket
-     * @param {import('../BDI_Agent/bdi/beliefs.js').Beliefs} beliefs
+     * @param {import('../../BDI_Agent/modules/beliefs.js').Beliefs} beliefs
      * @param {LLMAgent} agent  — back-reference for partner intentions
      */
     constructor(socket, beliefs, agent = null) {

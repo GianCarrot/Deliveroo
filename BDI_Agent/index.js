@@ -1,8 +1,8 @@
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { connect } from "../shared/connection.js";
-import { Beliefs } from "./bdi/beliefs.js";
-import { BDIAgent } from "./bdi/agents.js";
+import { Beliefs } from "./modules/beliefs.js";
+import { BDIAgent } from "./modules/agents.js";
 import { MSG } from "../shared/common_protocol.js";
 
 /**
@@ -87,7 +87,7 @@ export function startBDIAgent(socket) {
         }
     });
 
-    // ─── Receive messages from team partner only ──────────
+    // Receive messages from team partner only
     socket.on("msg", (fromId, fromName, msg) => {
         if (!msg || !msg.type) return;
 
@@ -121,7 +121,7 @@ export function startBDIAgent(socket) {
     return { socket, agent, beliefs };
 }
 
-// ─── Standalone mode ─────────────────────────────────────
+// Standalone mode
 const __filename = fileURLToPath(import.meta.url);
 if (process.argv[1] === __filename) {
     dotenv.config();

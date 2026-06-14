@@ -24,7 +24,7 @@ function clockEventToMs(clockEvent) {
 
 export class Beliefs {
     constructor() {
-        // --- Agent ---
+        // Agent
         this.me = {
             id: null,
             name: null,
@@ -34,7 +34,7 @@ export class Beliefs {
             score: 0
         };
 
-        // --- Map ---
+        // Map
         this.mapWidth = 0;
         this.mapHeight = 0;
         this.tiles = [];
@@ -47,21 +47,21 @@ export class Beliefs {
         /** @type {Map<string, string>} Keys "x,y" -> tile type for arrow/directional checks */
         this.tileTypeMap = new Map();
 
-        // --- Parcels ---
+        // Parcels
         /** @type {Map<string, Object>} id -> parcel data with lastSeen and originalReward */
         this.parcelsMap = new Map();
         /** @type {string[]} IDs of parcels currently carried by the agent */
         this.carriedParcels = [];
 
-        // --- Agents ---
+        // Agents
         /** @type {Map<string, IOAgent>} id -> agent data */
         this.agentsMap = new Map();
 
-        // --- Crates ---
+        // Crates
         /** @type {Map<string, Object>} id -> crate data */
         this.cratesMap = new Map();
 
-        // --- Configuration (default values, updated by updateConfig) ---
+        //  Configuration (default values, updated by updateConfig)
         /** @type {number|'infinite'} Observation distance (Manhattan) */
         this.observationDistance = 5;
         /** @type {number|null} Reward decay interval in ms, null = no decay */
