@@ -1,3 +1,17 @@
+/**
+ * Evaluates all candidate desires and returns them sorted by utility.
+ *
+ * Candidates include:
+ * - pickParcel: U = reward − (travelCost + deliveryCost), with batch-aware
+ *   detour analysis when already carrying parcels
+ * - deliverParcel: U = carriedReward − deliveryCost (fallback utility = 1)
+ * - goToSpawn: fallback when no profitable action exists (utility = 0)
+ *
+ * Parcels committed to by the partner agent are excluded.
+ *
+ * @param {import('./agents.js').BDIAgent} agent
+ * @returns {Array<{type: string, target?: object, utility: number}>}
+ */
 export function getDesires(agent) {
     const candidates = [];
     const beliefs = agent.beliefs;

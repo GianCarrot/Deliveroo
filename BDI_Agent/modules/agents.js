@@ -193,77 +193,7 @@ export class BDIAgent {
         return [];
     }
 
-    /**
-     * Plans a path to a spawn tile (type 1) using A*.
-     * Continuously patrols between spawn tiles to discover parcels.
-     * Falls back to a safe random direction if no spawn tile is reachable.
-     */
-    _planGoToSpawn() {
-        const x = Math.round(this.beliefs.me.x);
-        const y = Math.round(this.beliefs.me.y);
 
-        // If on an arrow tile, must follow its direction
-        const tileType = this.beliefs.getTileType(x, y);
-        const arrowDirs = { '↑': 'up', '↓': 'down', '→': 'right', '←': 'left' };
-        if (tileType && arrowDirs[tileType]) {
-            return [{ action: "move", dir: arrowDirs[tileType] }];
-        }
-
-        // Collect reachable spawn tiles (min distance 5 to avoid oscillation)
-        const MIN_SPAWN_DIST = 5;
-        const myPos = { x, y };
-        const candidates = [];
-
-        for (const key of this.beliefs.spawnTiles) {
-            const [sx, sy] = key.split(",").map(Number);
-            const manhattan = Math.abs(sx - x) + Math.abs(sy - y);
-            if (manhattan < MIN_SPAWN_DIST) continue;
-            const path = aStar(myPos, { x: sx, y: sy }, this.beliefs);
-            if (path && path.length > 1) {
-                candidates.push({ path, dist: path.length });
-            }
-        }
-
-        if (candidates.length > 0) {
-            // Pick randomly among the closest candidates (top 3)
-            candidates.sort((a, b) => a.dist - b.dist);
-            const topN = candidates.slice(0, Math.min(3, candidates.length));
-            const chosen = topN[Math.floor(Math.random() * topN.length)];
-            return this.pathToActions(chosen.path);
-        }
-
-        // Fallback: safe random direction (avoid walls, bad arrows, and agents)
-        const opposite = { up: 'down', down: 'up', left: 'right', right: 'left' };
-        const dirMap = [
-            { dir: "up", dx: 0, dy: 1 },
-            { dir: "down", dx: 0, dy: -1 },
-            { dir: "left", dx: -1, dy: 0 },
-            { dir: "right", dx: 1, dy: 0 },
-        ];
-        const safeDirs = dirMap.filter(({ dir, dx, dy }) => {
-            const nx = x + dx;
-            const ny = y + dy;
-            const nk = `${nx},${ny}`;
-            if (!this.beliefs.walkableTiles.has(nk)) return false;
-            const destType = this.beliefs.getTileType(nx, ny);
-            if (destType && arrowDirs[destType]) {
-                if (arrowDirs[destType] === opposite[dir]) return false;
-            }
-            for (const agent of this.beliefs.agentsMap.values()) {
-                if (Math.round(agent.x) === nx && Math.round(agent.y) === ny) return false;
-            }
-            return true;
-        });
-
-        if (safeDirs.length > 0) {
-            const choice = safeDirs[Math.floor(Math.random() * safeDirs.length)];
-            return [{ action: "move", dir: choice.dir }];
-        }
-
-        // Absolute fallback
-        const fallback = dirMap[Math.floor(Math.random() * dirMap.length)];
-        return [{ action: "move", dir: fallback.dir }];
-    }
 
     // PLAN EXECUTION
 

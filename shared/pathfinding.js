@@ -57,7 +57,8 @@ export function aStar(start, goal, beliefs) {
     }
 
     function canMoveTo(fromX, fromY, x, y) {
-        if (x < 0 || y < 0 || x >= beliefs.mapWidth || y >= beliefs.mapHeight) {
+        // mapWidth and mapHeight are the maximum indices, so we use > instead of >=
+        if (x < 0 || y < 0 || x > beliefs.mapWidth || y > beliefs.mapHeight) {
             return false;
         }
         
@@ -79,7 +80,8 @@ export function aStar(start, goal, beliefs) {
             const nextX = x + dx;
             const nextY = y + dy;
             
-            if (nextX < 0 || nextY < 0 || nextX >= beliefs.mapWidth || nextY >= beliefs.mapHeight) {
+            // Pushed crate must stay within map bounds
+            if (nextX < 0 || nextY < 0 || nextX > beliefs.mapWidth || nextY > beliefs.mapHeight) {
                 return false;
             }
             

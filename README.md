@@ -205,7 +205,7 @@ The agent uses a **ReAct** (Reasoning + Acting) loop:
 ### PDDL Integration
 
 - The `pddl_plan_route` tool calls the **online PDDL solver** at `solver.planning.domains` via `@unitn-asa/pddl-client`
-- A PDDL domain with `move(agent, from, to)` actions and `at/adjacent` predicates is generated dynamically from the map
+- A PDDL domain with `move(agent, from, to)` actions and `at/adjacent` predicates is defined with a fixed STRIPS schema; the problem instance (initial state and goal) is generated dynamically from the current map and agent position
 - The solver returns an optimal action sequence which is parsed and executed as directional moves
 - If the solver fails or times out, A* is used as fallback
 - For standard navigation, `plan_route` uses local A* directly (much faster)
@@ -236,7 +236,7 @@ Agents communicate via the Deliveroo SDK's `socket.emitSay(partnerId, message)` 
 ### Communication Flow
 
 1. On each `sensing` event, each agent broadcasts its visible parcels to the partner via `belief_update` (with change detection to avoid spam).
-2. After deliberation, the BDI agent broadcasts its chosen target via `intention_commit`.
+2. After deliberation, the BDI agent broadcasts its chosen target via `intention_commit`. The LLM agent broadcasts `intention_commit` when navigating toward a known parcel, and `intention_clear` after a successful delivery.
 3. When evaluating parcels, each agent's deliberation skips parcels that the partner has committed to.
 4. Partner IDs are exchanged automatically by `main.js` after both agents connect.
 5. Plain string messages (non-structured) are treated as natural language instructions for the LLM agent.
