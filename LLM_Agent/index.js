@@ -80,6 +80,7 @@ export function startLLMAgent(socket, llmConfig) {
             }
 
             if (sensing.agents) beliefs.updateAgents(sensing.agents);
+            if (sensing.crates) beliefs.updateCrates(sensing.crates);
 
             memory.updateWorld();
 

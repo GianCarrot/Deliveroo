@@ -57,11 +57,11 @@ export function aStar(start, goal, beliefs) {
     }
 
     function canMoveTo(fromX, fromY, x, y) {
-        // mapWidth and mapHeight are the maximum indices, so we use > instead of >=
+        // mapWidth and mapHeight are the maximum indices
         if (x < 0 || y < 0 || x > beliefs.mapWidth || y > beliefs.mapHeight) {
             return false;
         }
-        
+
         const targetTileType = beliefs.getTileType(x, y);
         if (!targetTileType || targetTileType === '0') {
             return false;
@@ -76,15 +76,15 @@ export function aStar(start, goal, beliefs) {
         if (crateCells.has(targetKey)) {
             const dx = x - fromX;
             const dy = y - fromY;
-            
+
             const nextX = x + dx;
             const nextY = y + dy;
-            
+
             // Pushed crate must stay within map bounds
             if (nextX < 0 || nextY < 0 || nextX > beliefs.mapWidth || nextY > beliefs.mapHeight) {
                 return false;
             }
-            
+
             const nextTileType = beliefs.getTileType(nextX, nextY);
             if (!nextTileType || !nextTileType.startsWith('5')) {
                 return false;
@@ -118,7 +118,7 @@ export function aStar(start, goal, beliefs) {
             const [dx, dy] = ARROW_DIRECTION[tileType];
             const nx = x + dx;
             const ny = y + dy;
-            
+
             if (canMoveTo(x, y, nx, ny)) {
                 return [[nx, ny]];
             }

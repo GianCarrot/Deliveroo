@@ -39,33 +39,7 @@ export class LLMExecutor {
                 }
             },
 
-            pick_up: async () => {
-                try {
-                    const result = await this.socket.emitPickup();
-                    if (Array.isArray(result) && result.length > 0) {
-                        this.beliefs.addCarriedParcels(result);
-                        return `Picked up ${result.length} parcel(s)`;
-                    }
-                    return "Failed to pick up – no parcels on this tile";
-                } catch (e) {
-                    return `Error: ${e.message}`;
-                }
-            },
 
-            put_down: async () => {
-                try {
-                    const result = await this.socket.emitPutdown();
-                    if (Array.isArray(result) && result.length > 0) {
-                        this.beliefs.clearCarriedParcels();
-                        // Clear intention after successful delivery
-                        this._broadcastIntentionClear();
-                        return `Delivered ${result.length} parcel(s) successfully`;
-                    }
-                    return "Failed to put down – not on a delivery tile or no parcels carried";
-                } catch (e) {
-                    return `Error: ${e.message}`;
-                }
-            },
 
             /**
              * Fast local pathfinding (A*) — used for standard autonomous navigation.
@@ -362,7 +336,7 @@ export class LLMExecutor {
                 stepsCompleted++; // We did move despite the timeout
             }
 
-            // Opportunistic pickup during movement
+            // Opportunistic pickup during movement is handled inside the loop
             const cx = Math.round(this.beliefs.me.x);
             const cy = Math.round(this.beliefs.me.y);
             const parcelsHere = this.beliefs.parcels.filter(
@@ -376,6 +350,36 @@ export class LLMExecutor {
                     }
                 } catch (_) { /* ignore pickup timeout */ }
             }
+        }
+
+        // Wait to ensure final position settles
+        await new Promise(r => setTimeout(r, 50));
+        
+        const finalX = Math.round(this.beliefs.me.x);
+        const finalY = Math.round(this.beliefs.me.y);
+
+        // Opportunistic pickup at final destination
+        const parcelsAtEnd = this.beliefs.parcels.filter(
+            p => !p.carriedBy && Math.round(p.x) === finalX && Math.round(p.y) === finalY
+        );
+        if (parcelsAtEnd.length > 0) {
+            try {
+                const pickResult = await this.socket.emitPickup();
+                if (Array.isArray(pickResult) && pickResult.length > 0) {
+                    this.beliefs.addCarriedParcels(pickResult);
+                }
+            } catch (_) {}
+        }
+
+        // Opportunistic putdown at final destination
+        if (this.beliefs.carriedParcels.length > 0 && this.beliefs.deliveryTiles.has(`${finalX},${finalY}`)) {
+            try {
+                const putResult = await this.socket.emitPutdown();
+                if (Array.isArray(putResult) && putResult.length > 0) {
+                    this.beliefs.clearCarriedParcels();
+                    this._broadcastIntentionClear();
+                }
+            } catch (_) {}
         }
 
         return this._arrivalReport(x, y, stepsCompleted, null);
