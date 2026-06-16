@@ -116,6 +116,47 @@ export class LLMExecutor {
                 }
                 return JSON.stringify([...intentions]);
             },
+
+            /**
+             * Sends a directive to the BDI partner, commanding it to move
+             * to specific coordinates or to resume autonomous behavior.
+             */
+            send_directive_to_partner: async (input) => {
+                if (!this.agent?.partnerId) {
+                    return "Error: no partner connected yet";
+                }
+                const trimmed = (input || "").trim().toLowerCase();
+                if (trimmed === "resume" || trimmed === "clear") {
+                    try {
+                        await this.socket.emitSay(this.agent.partnerId, MSG.directiveClear());
+                    } catch (_) { /* partner may not be connected */ }
+                    return "Directive cleared — Agent A will resume autonomous parcel collection";
+                }
+                const coords = this._parseCoordinates(input);
+                if (!coords) {
+                    return "Error: use 'go_to x,y' to send Agent A to coordinates, or 'resume' to cancel";
+                }
+                try {
+                    await this.socket.emitSay(
+                        this.agent.partnerId,
+                        MSG.directive("go_to", { x: coords.x, y: coords.y })
+                    );
+                } catch (_) { /* partner may not be connected */ }
+                return `Directive sent: Agent A will navigate to (${coords.x}, ${coords.y}) and wait there`;
+            },
+
+            /**
+             * Resumes default behavior for BOTH agents.
+             * Clears the active directive for Agent A and resets Agent B to its default objective.
+             */
+            resume_default_behavior: async () => {
+                try {
+                    await this.socket.emitSay(this.agent.partnerId, MSG.directiveClear());
+                } catch (_) { /* ignore */ }
+                
+                await this.agent.resumeDefaultObjective();
+                return "Mission complete. Resumed default autonomous behavior for both agents.";
+            },
         };
     }
 

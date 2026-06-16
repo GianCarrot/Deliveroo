@@ -88,7 +88,7 @@ export function startLLMAgent(socket, llmConfig) {
             if (!defaultObjectiveSet && beliefs.mapWidth) {
                 defaultObjectiveSet = true;
                 console.log("[LLM] World ready → starting autonomous collection...");
-                await llmAgent.setObjective(
+                llmAgent.setDefaultObjective(
                     "Continuously collect parcels and deliver them to delivery tiles to maximise your score. " +
                     "Pick the nearest high-reward parcel, pick it up, then go to the nearest delivery tile and put down. " +
                     "If no parcels are visible, patrol near spawn tiles to find new ones. " +

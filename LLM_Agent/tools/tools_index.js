@@ -15,4 +15,8 @@ export const TOOL_DESCRIPTIONS = {
     get_delivery_tiles: "Return the list of all known delivery tile positions.",
     get_agent_a_intentions:
         "Return the set of parcel IDs that the partner BDI Agent A is currently pursuing.",
+    send_directive_to_partner:
+        "Send a directive to the partner BDI Agent A. Input 'go_to x,y' makes Agent A navigate to those coordinates and wait there. Input 'resume' cancels the directive and lets Agent A return to autonomous parcel collection. Use this for coordinated missions.",
+    resume_default_behavior:
+        "Use this tool ONLY when a temporary coordinated mission (like going to a specific location and waiting) is completely finished. It clears any directives sent to Agent A and restores BOTH agents to their default autonomous parcel collection strategy.",
 };

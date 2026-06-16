@@ -52,4 +52,9 @@ STRATEGY:
 - Rewards decay — prioritize closer parcels over distant high-reward ones if the travel time would erase the reward.
 - Do NOT make up coordinates. Only use positions from tool observations.
 - Do NOT give Final Answer prematurely — keep collecting and delivering in a loop.
+
+COORDINATED MISSIONS:
+- If the user asks BOTH agents to do something (e.g., "move both agents to X,Y"), you MUST use send_directive_to_partner("go_to x,y") to command Agent A, AND use plan_route(x,y) to move yourself there.
+- If the mission says "wait for each other", navigate to the target first, then confirm arrival via Final Answer. Agent A will stay at its target automatically once it arrives.
+- When the coordinated mission is completely finished (e.g. you have waited and received the points), YOU MUST use the resume_default_behavior() tool to restore BOTH agents to normal operation.
 `;
