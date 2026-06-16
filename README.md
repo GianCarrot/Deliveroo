@@ -1,21 +1,14 @@
 # Deliveroo Multi-Agent System
 
-> Autonomous Software Agents — A.A. 2025-2026, University of Trento
+> Autonomous Software Agents - A.A. 2025-2026, University of Trento - G. Rota, G. Watterson
 
----
-
-## 👥 Team
-- Gianluca Rota (gianluca.rota@studenti.unitn.it)
-- Guelfo Watterson (guelfo.watterson@studenti.unitn.it)
-  
 ---
 
 ## 1. Introduction
 
 ### Objective
 
-Build an **autonomous BDI and LLM software agent** which plays Deliveroo.js game on its own. The agent must maximize its score by efficiently **picking and collecting parcels** on the map and **deliver them** to the delivery zone. The **BDI Agent** senses continuously the enviornment, updates beliefs and performs optimal and real time action plans. The **LLM Agent** receives and understand the requests, adapts high-level strategies, and coordinates multi-agent collaboration.
-
+Build an **autonomous BDI and LLM software agent** which plays Deliveroo.js game on its own. The agent must maximize its score by efficiently **picking and collecting parcels** on the map and **deliver them** to the delivery zone. The **BDI Agent** senses continuously the environment, updates beliefs and performs optimal and real time action plans. The **LLM Agent** receives and understand the requests, adapts high-level strategies, and coordinates multi-agent collaboration.
 
 ---
 
@@ -36,12 +29,11 @@ Build an **autonomous BDI and LLM software agent** which plays Deliveroo.js game
 3. **Planning**: To guarantee optimality and completeness, A* algorithm has been chosen to coordinate and converts them into directional move/action sequences.
 4. **Execution and Replanning**: Loops actions with dynamic replanning for blocked paths or better opportunities.
 
-
 ### LLM
 
 ### Architecture
 
-Four-component are desgined for the implementation:
+Four-component are designed for the implementation:
 
 | Component | File | Role |
 |---|---|---|
@@ -211,13 +203,13 @@ The system deploys a decoupled multi-agent architecture within a single Node.js 
 
 The LLM Agent features an advanced, logic-based planning capability through the integration of **PDDL (Planning Domain Definition Language)**. While standard movement is handled by the local A* algorithm, PDDL provides a symbolic reasoning fallback for complex navigation constraints.
 
-**Implementation:**
+#### Implementation
 The integration relies on the `@unitn-asa/pddl-client` library, which provides access to the free online solver at `solver.planning.domains`. When invoked, the agent dynamically generates a complete PDDL representation of the world on the fly:
 1. **Beliefset Construction:** The agent translates its internal knowledge (its current coordinates and all known `walkableTiles`) into symbolic facts. For instance, being at `(3, 4)` becomes `(at a1 t_3_4)`.
 2. **Domain Definition:** An inline STRIPS domain defines the generic `move` action, specifying preconditions (the agent must be at the origin tile, the destination tile must be adjacent and walkable) and effects (updating the agent's location).
 3. **Problem Definition:** A PDDL problem string is assembled using the agent's current location as the initial state and the target coordinates as the goal state.
 
-**Data Flow during execution:**
+#### Data Flow during execution
 When the LLM decides to use the PDDL solver, the data flows as follows:
 1. The tool `pddl_plan_route(x, y)` is triggered by the LLM ReAct loop.
 2. The `LLMExecutor` builds the Domain and Problem strings and sends them via an HTTP POST request to the remote online solver.
@@ -225,10 +217,10 @@ When the LLM decides to use the PDDL solver, the data flows as follows:
 4. The executor parses these steps, translates the tile coordinates back into physical directions (`up`, `down`, `left`, `right`), and sequentially emits movement commands through the Deliveroo socket.
 5. If the solver fails or times out, the system automatically gracefully falls back to the local A* algorithm.
 
-**Purpose:**
+#### Purpose
 The LLM is explicitly instructed in its system prompt (`agentPrompt.js`) to *avoid* using PDDL for normal parcel collection. Instead, `pddl_plan_route` is reserved for specific, complex situations—usually triggered when a user sends a natural language instruction via chat that requires logical constraint solving or explicit step-by-step symbolic planning rather than simple shortest-path navigation.
 
-**Comparison to A\*:**
+#### Comparison to A\*
 A* is a highly optimized graph-search algorithm running locally in a few milliseconds. In contrast, PDDL is significantly slower due to several factors:
 - **Network Latency:** It requires an external HTTP request to a remote server.
 - **Translation Overhead:** The entire grid must be converted into hundreds of symbolic string predicates (e.g., `adjacent t_1_1 t_1_2`).
@@ -236,24 +228,24 @@ A* is a highly optimized graph-search algorithm running locally in a few millise
 
 ---
 
-## 7. Conclusions
+## 7. Final notes
 
-### Conclusions
+### 7.1 Conclusions
 This project successfully demonstrates a hybrid multi-agent architecture within a competitive, real-time environment. By combining a classic AI paradigm (the BDI agent, excelling in high-speed reactive deliberation and optimal pathfinding) with modern generative AI (the LLM agent, slower due to API calls and the complexity of the task, but offering strategic adaptability and natural language reasoning), the system achieves a robust synergy. Furthermore, the explicit communication protocol enables the agents to expand their effective field of view and dynamically avoid intention collisions, proving the importance of structured cooperation in autonomous software systems.
 
-### Future Developments
-While the current architecture proves highly effective, the system lays a solid foundation for future extensions. Potential enhancements could include upgrading the communication protocol from passive intention sharing to active negotiation (e.g., Contract Net Protocol) for optimal task distribution. Additionally, incorporating long-term vector memory (RAG) could allow the LLM agent to recall successful historical strategies across sessions, while expanding the PDDL domain to include dynamic entity manipulation (i.e. crate pushing) would further enhance the solver's utility in complex spatial puzzles.
+### 7.2 Future Developments
+While the current architecture proves highly effective, the system lays a solid foundation for future extensions. Potential enhancements could include upgrading the communication protocol for more complex task distribution. Additionally, incorporating long-term vector memory (RAG) could allow the LLM agent to recall successful historical strategies across sessions, while expanding the PDDL domain to include dynamic entity manipulation (i.e. crate pushing) would further enhance the solver's utility in complex spatial puzzles.
 
 ---
 
 ## 8. Appendix
 
-### Project Structure
+### 8.1 Project Structure
 
 ```text
 deliveroo/
-├── main.js                      # Multi-agent launcher (starts both agents, exchanges partner IDs)
-├── package.json                 # Root dependencies (pddl-client, openai, dotenv, deliveroo-js-sdk)
+├── main.js                      # Multi-agent launcher
+├── package.json                 # Root dependencies
 │
 ├── shared/                      # Shared modules used by both agents
 │   ├── common_protocol.js       # Message types & factories for inter-agent communication
@@ -265,24 +257,63 @@ deliveroo/
 │   ├── .env.example             # Template for Agent A credentials
 │   ├── index.js                 # BDI entry point, event listeners, communication handlers
 │   └── modules/
-│       ├── agents.js            # BDIAgent class: BDI cycle, replanning, plan execution
-│       ├── beliefs.js           # Beliefs: map, parcels, agents, forgetting logic, tile types
+│       ├── agents.js            # BDI Cicle
+│       ├── beliefs.js           # Map, parcels, agents, forgetting logic, tile types
 │       ├── desires.js           # Utility-based goal evaluation + partner intention filtering
-│       └── intentions.js        # Goal → action plan mapping (pickParcel, deliverParcel, goToSpawn)
+│       └── intentions.js        # Goal → action plan mapping
 │
 └── LLM_Agent/
     ├── .env                     # Agent B credentials + LLM API configuration
     ├── .env.example             # Template for Agent B credentials
     ├── index.js                 # LLM entry point, event listeners, NL instruction handler
     ├── modules/
-    │   ├── LLMAgent.js              # Orchestrator: objective → ReAct loop → execute → replan
-    │   ├── LLMMemory.js             # Context window: world snapshots, partner beliefs, change detection
-    │   ├── LLMPlanner.js            # ReAct loop: LLM ↔ tool execution with retry and abort logic
-    │   ├── LLMReplanner.js          # Monitors world changes and triggers replanning between turns
-    │   └── LLMExecutor.js           # Tool implementations: move, pickup, A* navigation, PDDL solver
+    │   ├── LLMAgent.js              # Orchestrator
+    │   ├── LLMMemory.js             # Context window
+    │   ├── LLMPlanner.js            # ReAct loop
+    │   ├── LLMReplanner.js          # Triggers replanning between turns
+    │   └── LLMExecutor.js           # Tool implementations
     ├── callModel.js             # OpenAI-compatible API wrapper with error handling
     ├── prompts/
-    │   └── agentPrompt.js       # ReAct system prompt (dynamically generated from tools_index)
+    │   └── agentPrompt.js       # ReAct system prompt
     └── tools/
         └── tools_index.js       # Single source of truth for tool descriptions
 ```
+### 8.2 Run the multi-agent system
+
+#### 1. Install Dependencies
+
+```bash
+npm install
+```
+
+#### 2. Configure Environment Files
+
+Each agent has its own `.env` file. Copy the `.env.example` templates and fill in your credentials.
+
+#### 3. Launch
+
+##### Both agents together (recommended)
+
+```bash
+node main.js
+```
+
+This starts both agents in a single process, automatically exchanges their partner IDs, and enables inter-agent communication. Both agents connect to the game server with their respective tokens.
+
+##### Agent A only (BDI)
+
+```bash
+cd BDI_Agent
+node index.js
+```
+
+Runs the BDI agent standalone. It will collect and deliver parcels autonomously. Without a partner, coordination features are inactive.
+
+##### Agent B only (LLM)
+
+```bash
+cd LLM_Agent
+node index.js
+```
+
+Runs the LLM agent standalone. It starts collecting parcels autonomously on connection. You can send natural language instructions via the in-game chat to dynamically change its strategy.

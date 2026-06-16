@@ -13,7 +13,7 @@ import { callModel } from "../callModel.js";
 import { AGENT_PROMPT } from "../prompts/agentPrompt.js";
 
 export class LLMPlanner {
-    constructor({ maxIterations = 15 } = {}) {
+    constructor({ maxIterations = 2 } = {}) {
         this.maxIterations = maxIterations;
         this.abortCurrentTurn = false;
     }

@@ -37,22 +37,8 @@ export class LLMMemory {
     hasWorldChanged() {
         if (!this.worldSnapshot) return false;
 
-        const prev = this.worldSnapshot.parcels;
-        const now = this.beliefs.parcels;
-
-        // Parcel count changed
-        if (prev.length !== now.length) return true;
-
-        // Any new parcel appeared
-        const prevIds = new Set(prev.map((p) => p.id));
-        for (const p of now) {
-            if (!prevIds.has(p.id)) return true;
-        }
-
-        // Carried parcels changed
-        if (this.worldSnapshot.carriedCount !== this.beliefs.carriedParcels.length) {
-            return true;
-        }
+        // Replan only if the number of carried parcels has changed
+        if (this.worldSnapshot.carriedCount !== this.beliefs.carriedParcels.length) return true;
 
         return false;
     }

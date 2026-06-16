@@ -373,7 +373,7 @@ export class Beliefs {
 
         for (let dx = -dist; dx <= dist; dx++) {
             for (let dy = -dist; dy <= dist; dy++) {
-                if (Math.abs(dx) + Math.abs(dy) < dist) {
+                if (Math.abs(dx) + Math.abs(dy) <= dist) {
                     cells.add(`${myX + dx},${myY + dy}`);
                 }
             }
