@@ -25,7 +25,7 @@ Build an **autonomous BDI and LLM software agent** which plays Deliveroo.js game
 
 ### Architecture
 
-- **Utility-Based Deliberation**: Evaluates all known parcels using `U = Reward − (TravelCost + DeliveryCost)` including multi-pickup route optimization.
+- **Utility-Based Deliberation**: Evaluates all known parcels using `U = Reward - Total Distance - Decay Penalty` including multi-pickup route optimization.
 - **Dynamic Pathfinding**: Utilizes A* algorithm (in `shared/pathfinding.js`) which is integrated in dynamic obstacles (agents, crates), directional arrow tiles, and crate-pushing mechanics.
 - **Robustness**: Implements SDK retry logic and blacklists blocked delivery tiles.
 
@@ -114,10 +114,12 @@ Responsibilities of this module are:
 The **Desire** Module dynamically valuates all potential goals available to the agent and scores them using a **Utility-based heuristic (U)**, filtering out resource conflicts by skipping parcels already targeted by the partner (`partnerIntentions`) or blocked by other agents (`agentOccupied`). The evaluation of the utility is:
 
 ```text
-U = Reward - (Travel Cost + Delivery Cost From Parcel)
+U = Reward - Total Distance - Decay Penalty
 ```
 
-When carrying parcels, it assesses a multi-pickup detour, calculating combined utility only if the extra parcel yields a positive net gain along the delivery path. Otherwise, it defaults to a `deliverParcel` intent (min. utility of 1 to prevent deadlocks). If no profitable options exist, it issues a `goToSpawn` intent (`U = 0`), to trigger scouting, ultimately passing this optimized candidate list to the deliberation system.
+Where **Decay Penalty** represents the value lost by all currently carried parcels during the time spent traveling (`Decay Penalty = Extra Detour Steps × Carried Parcels Count`).
+
+When carrying parcels, it assesses a multi-pickup detour, calculating combined utility only if the extra parcel yields a positive net gain along the delivery path, explicitly penalizing detours that would cause excessive decay to the already secured cargo. Otherwise, it defaults to a `deliverParcel` intent (min. utility of 1 to prevent deadlocks) which correctly factors in the expected decay during the direct route to the delivery zone. If no profitable options exist, it issues a `goToSpawn` intent (`U = 0`), to trigger scouting, ultimately passing this optimized candidate list to the deliberation system.
 
 ### 3.3 Intentions
 

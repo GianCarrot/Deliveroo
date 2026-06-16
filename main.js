@@ -10,17 +10,17 @@ import { connect } from "./shared/connection.js";
 import { startBDIAgent } from "./BDI_Agent/index.js";
 import { startLLMAgent } from "./LLM_Agent/index.js";
 
-// ─── Load each agent's .env file ────────────────────────
+// Load each agent's .env file
 const bdiEnv = dotenv.parse(fs.readFileSync("./BDI_Agent/.env"));
 const llmEnv = dotenv.parse(fs.readFileSync("./LLM_Agent/.env"));
 
 console.log("[main] Starting multi-agent system...");
 
-// ─── Create independent sockets ─────────────────────────
+// Create independent sockets
 const socketA = connect(bdiEnv.HOST, bdiEnv.TOKEN);
 const socketB = connect(llmEnv.HOST, llmEnv.TOKEN);
 
-// ─── Start both agents ──────────────────────────────────
+// Start both agents
 const bdi = startBDIAgent(socketA);
 const llm = startLLMAgent(socketB, {
     baseURL: llmEnv.LITELLM_BASE_URL,
@@ -28,7 +28,7 @@ const llm = startLLMAgent(socketB, {
     model: llmEnv.LOCAL_MODEL,
 });
 
-// ─── Exchange partner IDs after both connect ─────────────
+// Exchange partner IDs after both connect
 let bdiId = null;
 let llmId = null;
 let idsExchanged = false;

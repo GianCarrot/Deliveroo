@@ -55,14 +55,21 @@ export function getDesires(agent) {
             ? agent.manhattan(parcelPos, deliveryFromParcel) : Infinity;
 
         if (isCarrying) {
+            const carriedCount = beliefs.carriedParcels ? beliefs.carriedParcels.length : 0;
             // Multi-pickup: is the detour to pick up this parcel worth it?
             // detourCost = extra distance added vs going straight to delivery
             const detourCost = travelCost + deliveryCostFromParcel - myDeliveryCost;
-            const netGain = p.reward - Math.max(0, detourCost);
+            const actualDetour = Math.max(0, detourCost);
+            
+            // Factor in decay: every step of detour decays all currently carried parcels
+            const decayPenalty = actualDetour * carriedCount;
+            // The new parcel will decay by the total distance to pickup + delivery
+            const totalDistance = travelCost + deliveryCostFromParcel;
+            const netGain = p.reward - totalDistance - decayPenalty;
 
             if (netGain > 0) {
                 // Utility = total value of "pick up + deliver all together"
-                const U = carriedReward + p.reward - (travelCost + deliveryCostFromParcel);
+                const U = carriedReward - (totalDistance * carriedCount) + p.reward - totalDistance;
                 candidates.push({ type: "pickParcel", target: p, utility: U });
             }
         } else {
@@ -76,7 +83,8 @@ export function getDesires(agent) {
 
     // 2. Evaluate delivery if we carry anything
     if (isCarrying && myNearestDelivery) {
-        const uDelivery = carriedReward - myDeliveryCost;
+        const carriedCount = beliefs.carriedParcels ? beliefs.carriedParcels.length : 0;
+        const uDelivery = carriedReward - (myDeliveryCost * carriedCount);
         if (uDelivery > 0) {
             candidates.push({ type: "deliverParcel", utility: uDelivery });
         } else {
