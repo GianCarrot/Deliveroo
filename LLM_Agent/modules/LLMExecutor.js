@@ -368,7 +368,7 @@ export class LLMExecutor {
                 if (Array.isArray(pickResult) && pickResult.length > 0) {
                     this.beliefs.addCarriedParcels(pickResult);
                 }
-            } catch (_) {}
+            } catch (_) { /* pickup timeout at destination, not critical */ }
         }
 
         // Opportunistic putdown at final destination
@@ -379,7 +379,7 @@ export class LLMExecutor {
                     this.beliefs.clearCarriedParcels();
                     this._broadcastIntentionClear();
                 }
-            } catch (_) {}
+            } catch (_) { /* putdown timeout, parcels will be delivered next cycle */ }
         }
 
         return this._arrivalReport(x, y, stepsCompleted, null);

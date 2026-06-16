@@ -26,8 +26,13 @@ export class BDIAgent {
         console.log(`[BDI] Partner ID set to: ${id}`);
     }
 
-    // UTILITIES
-
+    /**
+     * Computes the Manhattan distance between two positions.
+     * Coordinates are rounded to the nearest integer before calculation.
+     * @param {{ x: number, y: number }} a
+     * @param {{ x: number, y: number }} b
+     * @returns {number}
+     */
     manhattan(a, b) {
         return Math.abs(Math.round(a.x) - Math.round(b.x)) +
             Math.abs(Math.round(a.y) - Math.round(b.y));
@@ -81,10 +86,19 @@ export class BDIAgent {
         return deliveries[0];
     }
 
+    /**
+     * Returns the nearest non-blacklisted delivery tile from the agent's current position.
+     * @returns {{ x: number, y: number }|null}
+     */
     getNearestDeliveryTile() {
         return this._nearestDeliveryFrom(this.beliefs.me);
     }
 
+    /**
+     * Converts a sequence of grid positions into directional move actions.
+     * @param {Array<{ x: number, y: number }>} path - ordered list of positions (at least 2)
+     * @returns {Array<{ action: string, dir: string }>} move actions (up/down/left/right)
+     */
     pathToActions(path) {
         if (!path || path.length < 2) return [];
 
@@ -104,8 +118,11 @@ export class BDIAgent {
         return actions;
     }
 
-    // DELIBERATION (UTILITY-BASED)
-
+    /**
+     * Selects the best intention from the candidate desires.
+     * Returns the desire with the highest utility, or a goToSpawn fallback.
+     * @returns {{ type: string, target?: object, utility: number }}
+     */
     deliberate() {
         const candidates = getDesires(this);
         if (candidates.length === 0) return { type: "goToSpawn", utility: 0 };

@@ -85,6 +85,11 @@ export class Beliefs {
         this.me.score = me.score;
     }
 
+    /**
+     * Extracts game configuration values relevant to belief revision.
+     * Reads observation distance and parcel decay interval from the server config object.
+     * @param {IOConfig} config - server configuration payload
+     */
     updateConfig(config) {
         if (config?.GAME?.player?.observation_distance !== undefined) {
             const dist = config.GAME.player.observation_distance;
