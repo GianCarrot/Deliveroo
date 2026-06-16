@@ -27,7 +27,7 @@ export class LLMAgent {
 
         /** Cooldown: minimum ms between consecutive turns to avoid API hammering */
         this._lastTurnEnd = 0;
-        this._turnCooldownMs = 2000;
+        this._turnCooldownMs = 200;
     }
 
     setPartnerId(id) {

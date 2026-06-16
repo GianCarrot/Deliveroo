@@ -67,8 +67,6 @@ export class Beliefs {
         /** @type {number|null} Reward decay interval in ms, null = no decay */
         this.parcelDecayIntervalMs = 1000;
 
-        // --- Target --
-        this.currentTarget = null;
     }
 
     // ─────────────────────────────────────────────
@@ -76,8 +74,8 @@ export class Beliefs {
     // ─────────────────────────────────────────────
 
     /**
-     * Updates game parameters from the server configuration.
-     * @param {IOConfig} config
+     * Updates the agent's own state from the server "you" event.
+     * @param {IOAgent} me
      */
     updateMe(me) {
         this.me.id = me.id;
@@ -87,6 +85,11 @@ export class Beliefs {
         this.me.score = me.score;
     }
 
+    /**
+     * Extracts game configuration values relevant to belief revision.
+     * Reads observation distance and parcel decay interval from the server config object.
+     * @param {IOConfig} config - server configuration payload
+     */
     updateConfig(config) {
         if (config?.GAME?.player?.observation_distance !== undefined) {
             const dist = config.GAME.player.observation_distance;

@@ -15,11 +15,11 @@ export function startBDIAgent(socket) {
     const beliefs = new Beliefs();
     const agent = new BDIAgent(socket, beliefs);
 
-    // ─── Change detection for emitSay (avoid chat spam) ──
+    // Change detection for emitSay (avoid chat spam)
     let _lastParcelFP = "";
     let _lastIntentionId = null;
 
-    // ─── Event Listeners ─────────────────────────────────
+    // Event Listeners
     socket.on("config", (config) => {
         beliefs.updateConfig(config);
     });

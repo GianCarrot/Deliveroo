@@ -5,6 +5,7 @@
  * Includes the PDDL plan_route tool
  */
 import { aStar } from "../../shared/pathfinding.js";
+import { MSG } from "../../shared/common_protocol.js";
 
 export class LLMExecutor {
     /**
@@ -38,31 +39,7 @@ export class LLMExecutor {
                 }
             },
 
-            pick_up: async () => {
-                try {
-                    const result = await this.socket.emitPickup();
-                    if (Array.isArray(result) && result.length > 0) {
-                        this.beliefs.addCarriedParcels(result);
-                        return `Picked up ${result.length} parcel(s)`;
-                    }
-                    return "Failed to pick up – no parcels on this tile";
-                } catch (e) {
-                    return `Error: ${e.message}`;
-                }
-            },
 
-            put_down: async () => {
-                try {
-                    const result = await this.socket.emitPutdown();
-                    if (Array.isArray(result) && result.length > 0) {
-                        this.beliefs.clearCarriedParcels();
-                        return `Delivered ${result.length} parcel(s) successfully`;
-                    }
-                    return "Failed to put down – not on a delivery tile or no parcels carried";
-                } catch (e) {
-                    return `Error: ${e.message}`;
-                }
-            },
 
             /**
              * Fast local pathfinding (A*) — used for standard autonomous navigation.
@@ -70,24 +47,13 @@ export class LLMExecutor {
              */
             plan_route: async (input) => {
                 try {
-                    let targetX, targetY;
+                    const coords = this._parseCoordinates(input);
+                    if (!coords) return "Error: provide target as 'x,y'";
 
-                    if (typeof input === "string") {
-                        const nums = input.match(/-?\d+/g);
-                        if (!nums || nums.length < 2) return "Error: provide target as 'x,y'";
-                        targetX = parseInt(nums[0]);
-                        targetY = parseInt(nums[1]);
-                    } else if (typeof input === "object") {
-                        targetX = input.x ?? input.target_x;
-                        targetY = input.y ?? input.target_y;
-                    }
+                    // Broadcast intention if navigating toward a known parcel
+                    this._broadcastIntentionForTarget(coords.x, coords.y);
 
-                    if (targetX == null || targetY == null) {
-                        return "Error: could not parse target position";
-                    }
-
-                    // Always use fast A* for standard navigation
-                    return await this._moveToAStar(targetX, targetY);
+                    return await this._moveToAStar(coords.x, coords.y);
                 } catch (e) {
                     return `Error in plan_route: ${e.message}`;
                 }
@@ -99,27 +65,11 @@ export class LLMExecutor {
              */
             pddl_plan_route: async (input) => {
                 try {
-                    let targetX, targetY;
-
-                    if (typeof input === "string") {
-                        const nums = input.match(/-?\d+/g);
-                        if (!nums || nums.length < 2) return "Error: provide target as 'x,y'";
-                        targetX = parseInt(nums[0]);
-                        targetY = parseInt(nums[1]);
-                    } else if (typeof input === "object") {
-                        targetX = input.x ?? input.target_x;
-                        targetY = input.y ?? input.target_y;
-                    }
-
-                    if (targetX == null || targetY == null) {
-                        return "Error: could not parse target position";
-                    }
-
-                    const pddlResult = await this._tryPddlSolve(targetX, targetY);
+                    const coords = this._parseCoordinates(input);
+                    if (!coords) return "Error: provide target as 'x,y'";
+                    const pddlResult = await this._tryPddlSolve(coords.x, coords.y);
                     if (pddlResult) return pddlResult;
-
-                    // Fallback if PDDL fails
-                    return await this._moveToAStar(targetX, targetY);
+                    return await this._moveToAStar(coords.x, coords.y);
                 } catch (e) {
                     return `Error in pddl_plan_route: ${e.message}`;
                 }
@@ -171,6 +121,54 @@ export class LLMExecutor {
 
     setAgent(agent) {
         this.agent = agent;
+    }
+
+    /**
+     * Parses target coordinates from a string "x,y" or an object {x, y}.
+     * @param {string|object} input
+     * @returns {{ x: number, y: number }|null}
+     */
+    _parseCoordinates(input) {
+        if (typeof input === "string") {
+            const nums = input.match(/-?\d+/g);
+            if (!nums || nums.length < 2) return null;
+            return { x: parseInt(nums[0]), y: parseInt(nums[1]) };
+        }
+        if (typeof input === "object" && input !== null) {
+            const x = input.x ?? input.target_x;
+            const y = input.y ?? input.target_y;
+            if (x == null || y == null) return null;
+            return { x, y };
+        }
+        return null;
+    }
+
+    // ─── Intention broadcasting ─────────────────────────
+
+    /**
+     * If the target coordinates match a known uncollected parcel,
+     * broadcast an intention_commit so the BDI partner avoids it.
+     */
+    _broadcastIntentionForTarget(x, y) {
+        const parcel = this.beliefs.parcels.find(
+            p => !p.carriedBy && Math.round(p.x) === x && Math.round(p.y) === y
+        );
+        if (parcel && this.agent?.partnerId) {
+            try {
+                this.socket.emitSay(this.agent.partnerId, MSG.intentionCommit(parcel.id));
+            } catch (_) { /* partner may not be connected */ }
+        }
+    }
+
+    /**
+     * Broadcast intention_clear after a successful delivery.
+     */
+    _broadcastIntentionClear() {
+        if (this.agent?.partnerId) {
+            try {
+                this.socket.emitSay(this.agent.partnerId, MSG.intentionClear());
+            } catch (_) { /* partner may not be connected */ }
+        }
     }
 
     /**
@@ -338,7 +336,7 @@ export class LLMExecutor {
                 stepsCompleted++; // We did move despite the timeout
             }
 
-            // Opportunistic pickup during movement
+            // Opportunistic pickup during movement is handled inside the loop
             const cx = Math.round(this.beliefs.me.x);
             const cy = Math.round(this.beliefs.me.y);
             const parcelsHere = this.beliefs.parcels.filter(
@@ -352,6 +350,36 @@ export class LLMExecutor {
                     }
                 } catch (_) { /* ignore pickup timeout */ }
             }
+        }
+
+        // Wait to ensure final position settles
+        await new Promise(r => setTimeout(r, 50));
+        
+        const finalX = Math.round(this.beliefs.me.x);
+        const finalY = Math.round(this.beliefs.me.y);
+
+        // Opportunistic pickup at final destination
+        const parcelsAtEnd = this.beliefs.parcels.filter(
+            p => !p.carriedBy && Math.round(p.x) === finalX && Math.round(p.y) === finalY
+        );
+        if (parcelsAtEnd.length > 0) {
+            try {
+                const pickResult = await this.socket.emitPickup();
+                if (Array.isArray(pickResult) && pickResult.length > 0) {
+                    this.beliefs.addCarriedParcels(pickResult);
+                }
+            } catch (_) { /* pickup timeout at destination, not critical */ }
+        }
+
+        // Opportunistic putdown at final destination
+        if (this.beliefs.carriedParcels.length > 0 && this.beliefs.deliveryTiles.has(`${finalX},${finalY}`)) {
+            try {
+                const putResult = await this.socket.emitPutdown();
+                if (Array.isArray(putResult) && putResult.length > 0) {
+                    this.beliefs.clearCarriedParcels();
+                    this._broadcastIntentionClear();
+                }
+            } catch (_) { /* putdown timeout, parcels will be delivered next cycle */ }
         }
 
         return this._arrivalReport(x, y, stepsCompleted, null);

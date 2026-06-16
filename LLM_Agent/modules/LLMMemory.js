@@ -17,6 +17,10 @@ export class LLMMemory {
      * Takes a snapshot of the current world state for change detection.
      */
     updateWorld() {
+        // Cap history to prevent unbounded memory growth in long games
+        if (this.history.length > 100) {
+            this.history = this.history.slice(-50);
+        }
         this.worldSnapshot = {
             parcels: [...this.beliefs.parcels],
             me: { ...this.beliefs.me },
@@ -105,6 +109,10 @@ export class LLMMemory {
             })),
             deliveryTiles: deliveryTiles.slice(0, 10),
             spawnTiles: spawnTiles.slice(0, 10),
+            partnerReportedParcels: this.partnerBeliefs
+                .filter(p => !p.carriedBy)
+                .slice(0, 5)
+                .map(p => ({ id: p.id, x: p.x, y: p.y, reward: p.reward })),
             recentHistory: this.history.slice(-5).map((h) => {
                 if (h.type === "action") return `${h.tool}(${h.args ?? ""}) → ${h.result}`;
                 if (h.type === "replan") return `[REPLAN: ${h.reason}]`;
