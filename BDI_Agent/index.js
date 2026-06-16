@@ -112,6 +112,16 @@ export function startBDIAgent(socket) {
             }
         } else if (msg.type === MSG.TYPES.INTENTION_CLEAR) {
             agent.partnerIntentions.clear();
+        } else if (msg.type === MSG.TYPES.DIRECTIVE) {
+            console.log(`[BDI] Directive received: ${msg.action} (${msg.x}, ${msg.y})`);
+            agent.activeDirective = { action: msg.action, x: msg.x, y: msg.y };
+            agent.intention = null;
+            agent.plan = [];
+        } else if (msg.type === MSG.TYPES.DIRECTIVE_CLEAR) {
+            console.log("[BDI] Directive cleared — resuming autonomous behavior");
+            agent.activeDirective = null;
+            agent.intention = null;
+            agent.plan = [];
         }
     });
 

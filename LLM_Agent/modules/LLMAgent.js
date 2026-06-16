@@ -21,6 +21,7 @@ export class LLMAgent {
         this.replanner = replanner;
 
         this.currentObjective = null;
+        this.defaultObjective = null;
         this.partnerId = null;
         this.partnerIntentions = new Set();
         this._busy = false;  // guard against overlapping turns
@@ -33,6 +34,20 @@ export class LLMAgent {
     setPartnerId(id) {
         this.partnerId = id;
         console.log(`[LLM] Partner ID set to: ${id}`);
+    }
+
+    setDefaultObjective(objectiveText) {
+        this.defaultObjective = objectiveText;
+        if (!this.currentObjective) {
+            this.setObjective(objectiveText);
+        }
+    }
+
+    async resumeDefaultObjective() {
+        if (this.defaultObjective && this.currentObjective !== this.defaultObjective) {
+            console.log("[LLM] Mission complete: resuming default autonomous objective");
+            await this.setObjective(this.defaultObjective);
+        }
     }
 
     /**

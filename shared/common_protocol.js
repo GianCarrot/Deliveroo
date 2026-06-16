@@ -9,6 +9,8 @@ export const MSG = {
         BELIEF_UPDATE: "belief_update",
         INTENTION_COMMIT: "intention_commit",
         INTENTION_CLEAR: "intention_clear",
+        DIRECTIVE: "directive",
+        DIRECTIVE_CLEAR: "directive_clear",
     },
 
     /**
@@ -48,6 +50,30 @@ export const MSG = {
     intentionClear() {
         return {
             type: MSG.TYPES.INTENTION_CLEAR,
+        };
+    },
+
+    /**
+     * Creates a directive message commanding the partner to perform an action.
+     * @param {string} action — e.g. "go_to"
+     * @param {{ x: number, y: number }} params — action parameters
+     * @returns {{ type: string, action: string, x: number, y: number }}
+     */
+    directive(action, params) {
+        return {
+            type: MSG.TYPES.DIRECTIVE,
+            action,
+            ...params,
+        };
+    },
+
+    /**
+     * Creates a directive_clear message, cancelling any active directive.
+     * @returns {{ type: string }}
+     */
+    directiveClear() {
+        return {
+            type: MSG.TYPES.DIRECTIVE_CLEAR,
         };
     },
 };

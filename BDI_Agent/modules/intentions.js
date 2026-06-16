@@ -60,6 +60,27 @@ function isMoveSafe(x, y, dir, beliefs) {
 }
 
 export const intentions = {
+    /**
+     * goToPosition: navigate to an arbitrary (x, y) coordinate, issued by a partner directive.
+     * No terminal action — the agent simply arrives and waits.
+     */
+    goToPosition: async (agent, intention) => {
+        const goal = intention.target;
+        if (!goal) return [];
+        const start = { x: Math.round(agent.beliefs.me.x), y: Math.round(agent.beliefs.me.y) };
+        const goalRounded = { x: Math.round(goal.x), y: Math.round(goal.y) };
+        if (start.x === goalRounded.x && start.y === goalRounded.y) {
+            return []; // already at destination, stay put
+        }
+        const path = aStar(start, goalRounded, agent.beliefs);
+        if (!path) {
+            console.log("A* path (goToPosition): no path found");
+            return [];
+        }
+        console.log(`A* path (goToPosition): ${path.length} nodes → (${goalRounded.x},${goalRounded.y})`);
+        return agent.pathToActions(path);
+    },
+
     pickParcel: async (agent, intention) => {
         const goal = intention.target;
         if (!goal) return [];

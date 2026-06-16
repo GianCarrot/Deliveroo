@@ -19,6 +19,7 @@ export class BDIAgent {
         // Inter-agent coordination
         this.partnerId = null;
         this.partnerIntentions = new Set(); // parcel IDs the partner has committed to
+        this.activeDirective = null; // directive from LLM partner, e.g. { action: "go_to", x, y }
     }
 
     setPartnerId(id) {
@@ -124,6 +125,15 @@ export class BDIAgent {
      * @returns {{ type: string, target?: object, utility: number }}
      */
     deliberate() {
+        // Directive override: if the LLM partner issued a go_to command, obey it
+        if (this.activeDirective && this.activeDirective.action === "go_to") {
+            return {
+                type: "goToPosition",
+                target: { x: this.activeDirective.x, y: this.activeDirective.y },
+                utility: Infinity,
+            };
+        }
+
         const candidates = getDesires(this);
         if (candidates.length === 0) return { type: "goToSpawn", utility: 0 };
         candidates.sort((a, b) => b.utility - a.utility);
